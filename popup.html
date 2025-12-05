@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { width: 420px; padding: 15px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #fff; color: #111; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .title { font-weight: 700; font-size: 14px; }
+        .btn-settings { background: none; border: none; cursor: pointer; color: #666; font-size: 16px; padding: 0; }
+        .btn-settings:hover { color: #000; }
+
+        .user-quote {
+            background: #f3f4f6; border-left: 4px solid #3b82f6;
+            padding: 10px; margin-bottom: 15px; font-style: italic; color: #4b5563;
+            max-height: 100px; overflow-y: auto; font-size: 13px; border-radius: 0 4px 4px 0;
+        }
+
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
+        .btn-action {
+            padding: 6px 12px; background: #e5e7eb; border: none; border-radius: 20px;
+            cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; color: #374151;
+        }
+        .btn-action:hover { background: #d1d5db; color: #000; }
+        .btn-action.active { background: #10b981; color: white; }
+
+        .status-bar { font-size: 13px; margin-bottom: 10px; font-weight: 500; color: #2563eb; display: none;}
+        .status-bar.show { display: block; }
+        .error { color: #dc2626; }
+
+        #answer { margin-top: 15px; line-height: 1.6; font-size: 14px; word-wrap: break-word; }
+        #answer pre { background: #1f2937; color: #e5e7eb; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; font-size: 13px;}
+        #answer code { font-family: monospace; background: #f3f4f6; color: #c026d3; padding: 2px 4px; border-radius: 4px; }
+    </style>
+    <script src="marked.min.js"></script> 
+</head>
+<body>
+    <div class="header">
+        <div class="title">AskGPT / Gemini</div>
+        <button id="open-settings" class="btn-settings" title="Cấu hình Provider">⚙️</button>
+    </div>
+
+    <div id="selected-text" class="user-quote">Loading text...</div>
+
+    <div class="actions">
+        <button class="btn-action" data-prompt="Giải thích chi tiết đoạn này cho người mới bắt đầu:">🧐 Giải thích</button>
+        <button class="btn-action" data-prompt="Dịch đoạn này sang tiếng Việt tự nhiên nhất:">🇻🇳 Dịch Việt</button>
+        <button class="btn-action" data-prompt="Dịch đoạn này sang tiếng Anh chuyên ngành:">🇬🇧 Dịch Anh</button>
+        <button class="btn-action" data-prompt="Tóm tắt các ý chính (bullet points):">📝 Tóm tắt</button>
+        <button class="btn-action" data-prompt="Phân tích ưu/nhược điểm hoặc lỗi sai trong đoạn này:">📊 Phân tích</button>
+        <button class="btn-action" data-prompt="Viết Unit Test (Jest/Go/Python) cho code này:">💻 Unit Test</button>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid #eee;">
+
+    <div id="status" class="status-bar"></div>
+    <div id="answer"></div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

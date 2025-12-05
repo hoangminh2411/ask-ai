@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "AskGPT - Ghost Mode (Multi-Provider)",
+  "version": "3.0",
+  "description": "Hỏi ChatGPT và Gemini (Web & API) trực tiếp trên trang web.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://gemini.google.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["marked.min.js", "content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["marked.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

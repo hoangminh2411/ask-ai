@@ -1,0 +1,106 @@
+/* ... (NÚT NỔI GIỮ NGUYÊN) ... */
+#askgpt-floating-btn {
+    position: absolute; z-index: 2147483647 !important;
+    background: #000; color: #fff; border: none; border-radius: 4px;
+    padding: 4px 10px; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 11px; font-weight: 600;
+    transition: transform 0.1s;
+}
+#askgpt-floating-btn:hover { transform: translateY(-2px); }
+
+/* === MODAL CONTAINER === */
+#askgpt-modal {
+    position: fixed; 
+    z-index: 2147483647 !important; /* QUAN TRỌNG */
+    /* ... (copy các thuộc tính khác từ bản css trước) ... */
+    width: 450px; min-width: 320px; max-width: 90vw; height: auto; max-height: 85vh;
+    background: #fff; box-shadow: 0 15px 50px rgba(0,0,0,0.3);
+    border-radius: 12px; border: 1px solid #e5e7eb;
+    display: flex; flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    animation: fadeIn 0.15s ease-out; box-sizing: border-box;
+    transition: width 0.2s, height 0.2s, top 0.2s, left 0.2s; /* Bật lại transition để resize thường mượt */
+}
+/* Sidebar Mode */
+#askgpt-modal.sidebar-mode {
+    top: 0 !important; right: 0 !important; left: auto !important;
+    height: 100vh !important; max-height: 100vh !important;
+    border-radius: 0 !important; border: none; border-left: 1px solid #d1d5db;
+    /* Box shadow bên trái để tách biệt với content */
+    box-shadow: -5px 0 15px rgba(0,0,0,0.05);
+}
+
+/* ... (HEADER, CONTROLS, BODY GIỮ NGUYÊN) ... */
+#askgpt-header { flex-shrink: 0; padding: 10px 14px; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 12px 12px 0 0; cursor: move; user-select: none; }
+#askgpt-modal.sidebar-mode #askgpt-header { cursor: default; border-radius: 0; }
+#askgpt-title { font-weight: 700; font-size: 13px; color: #111; display: flex; align-items: center; gap: 8px;}
+.askgpt-window-controls { display: flex; align-items: center; gap: 8px; }
+.askgpt-icon-btn { cursor: pointer; background: none; border: none; padding: 4px; border-radius: 4px; color: #9ca3af; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.askgpt-icon-btn:hover { background: #f3f4f6; color: #111; }
+.askgpt-icon-btn.close:hover { background: #fee2e2; color: #dc2626; }
+#askgpt-body { flex-grow: 1; overflow-y: auto; min-height: 0; padding: 16px; display: flex; flex-direction: column; gap: 12px; position: relative; }
+#askgpt-quote { background: #f9fafb; border-left: 3px solid #000; padding: 8px 12px; font-style: italic; color: #4b5563; font-size: 13px; max-height: 100px; overflow-y: auto; border-radius: 4px; flex-shrink: 0; }
+
+/* ... (INPUT & CHIPS - UPDATE STYLE CHIP) ... */
+.askgpt-input-group { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+#askgpt-custom-input { width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px; box-sizing: border-box; outline: none; transition: border-color 0.2s; }
+#askgpt-custom-input:focus { border-color: #000; }
+
+.askgpt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.askgpt-chip { 
+    padding: 4px 10px; background: #fff; 
+    border: 1px solid #e5e7eb; border-radius: 4px; 
+    cursor: pointer; font-size: 11px; font-weight: 500; color: #4b5563; 
+    user-select: none; transition: all 0.1s;
+}
+.askgpt-chip:hover { background: #f3f4f6; border-color: #9ca3af; color: #000; }
+.askgpt-chip.active { background: #000; color: #fff; border-color: #000; }
+
+/* ... (STATUS & RESULT GIỮ NGUYÊN) ... */
+#askgpt-status-container { display: none; flex-direction: column; gap: 8px; margin-top: 5px; flex-shrink: 0; }
+#askgpt-status-text { font-size: 13px; font-weight: 600; color: #2563eb; display: flex; align-items: center; gap: 6px; }
+.skeleton-line { height: 10px; background: #f3f4f6; border-radius: 4px; animation: pulse 1.5s infinite; }
+.skeleton-line.short { width: 50%; }
+@keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+#askgpt-result { font-size: 15px; color: #1f2937; line-height: 1.6; word-wrap: break-word; }
+#askgpt-result p { margin-bottom: 10px; }
+#askgpt-result strong, #askgpt-result b { font-weight: 700; color: #000; }
+#askgpt-result h1, #askgpt-result h2, #askgpt-result h3 { margin: 16px 0 8px; font-weight: 700; color: #111; }
+#askgpt-result ul, #askgpt-result ol { padding-left: 24px; margin-bottom: 12px; list-style-position: outside; }
+#askgpt-result pre { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 12px 0; font-family: monospace; font-size: 13px; }
+#askgpt-result code { background: #f3f4f6; color: #c026d3; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+#askgpt-result table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+#askgpt-result th, #askgpt-result td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+#askgpt-result th { background: #f9fafb; font-weight: 600; }
+
+/* === RESIZERS (FIX HIỂN THỊ) === */
+/* 1. Góc dưới phải (Float mode) */
+#askgpt-resizer {
+    width: 16px; height: 16px; 
+    background: transparent;
+    position: absolute; right: 1px; bottom: 1px;
+    cursor: nwse-resize; 
+    z-index: 100; /* Tăng Z-Index */
+}
+/* Kẻ vạch tam giác */
+#askgpt-resizer::after {
+    content: ''; position: absolute; right: 3px; bottom: 3px;
+    width: 6px; height: 6px;
+    border-right: 2px solid #9ca3af; border-bottom: 2px solid #9ca3af;
+}
+#askgpt-modal.sidebar-mode #askgpt-resizer { display: none; }
+
+/* 2. Cạnh trái (Sidebar mode) */
+#askgpt-sidebar-resizer {
+    display: none; 
+    position: absolute; left: 0; top: 0; bottom: 0; 
+    width: 8px; /* Tăng vùng bấm cho dễ kéo */
+    cursor: col-resize; 
+    z-index: 100; 
+    background: transparent;
+    transform: translateX(-50%); /* Căn giữa mép */
+}
+#askgpt-sidebar-resizer:hover { background: rgba(0,0,0,0.1); }
+#askgpt-modal.sidebar-mode #askgpt-sidebar-resizer { display: block; }
