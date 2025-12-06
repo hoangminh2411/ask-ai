@@ -7,13 +7,23 @@
     "activeTab",
     "scripting",
     "storage",
-    "debugger"
+    "debugger",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://gemini.google.com/*",
     "https://generativelanguage.googleapis.com/*"
   ],
+  "commands": {
+      "summarize-page": {
+        "suggested_key": {
+          "default": "Alt+S",
+          "mac": "Alt+S"
+        },
+        "description": "Tóm tắt trang web hiện tại"
+      }
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -25,11 +35,16 @@
     "open_in_tab": false
   },
   "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["marked.min.js", "content.js"],
-      "css": ["content.css"]
-    }
+   {
+    "matches": ["<all_urls>"],
+    "js": [
+        "marked.min.js",  
+        "content.js"
+    ],
+    "css": [   
+        "content.css"
+    ]
+  }
   ],
   "web_accessible_resources": [
     {

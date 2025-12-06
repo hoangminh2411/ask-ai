@@ -453,3 +453,39 @@ chrome.runtime.onMessage.addListener((msg) => {
         MANAGERS.gemini_web.windowId = null;
     }
 });
+
+
+
+
+// =================================================================
+// === MODULE 6: CONTEXT MENU & SHORTCUTS (NEW) ===
+// =================================================================
+
+// 1. Tạo Context Menu khi cài đặt
+chrome.runtime.onInstalled.addListener(() => {
+    // Menu tóm tắt cả trang (Click chuột phải bất kỳ đâu)
+    chrome.contextMenus.create({
+        id: "askgpt-summarize-page",
+        title: "📑 Tóm tắt trang này (Side Panel)",
+        contexts: ["page", "selection"] // Hiện cả khi bôi đen hoặc không
+    });
+});
+
+// 2. Xử lý khi bấm Context Menu
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === "askgpt-summarize-page") {
+        chrome.tabs.sendMessage(tab.id, { action: "summarize_page" });
+    }
+});
+
+// 3. Xử lý Phím tắt (Alt+S)
+chrome.commands.onCommand.addListener((command) => {
+    if (command === "summarize-page") {
+        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, { action: "summarize_page" });
+            }
+        });
+    }
+});
+
