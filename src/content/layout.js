@@ -1,0 +1,114 @@
+// Layout helpers: sidebar toggle and resize/drag behaviors
+const { state } = window.ASKGPT_CONTENT;
+
+function toggleSidebar() {
+    if (!state.modal) return;
+    state.isSidebarMode = !state.isSidebarMode;
+    const btnIcon = state.modal.querySelector('#askgpt-dock-btn');
+    const header = document.getElementById('askgpt-header');
+
+    if (state.isSidebarMode) {
+        state.modal.classList.add('sidebar-mode');
+        state.originalBodyMargin = document.body.style.marginRight;
+        state.modal.style.width = '400px'; state.modal.style.height = '';
+        state.modal.style.top = ''; state.modal.style.left = '';
+        document.body.style.marginRight = '400px';
+        document.body.style.transition = 'margin-right 0.2s ease-out';
+        btnIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+        btnIcon.title = "Tháo ghim (Float)";
+        header.style.cursor = "default";
+    } else {
+        state.modal.classList.remove('sidebar-mode');
+        document.body.style.marginRight = state.originalBodyMargin;
+        const floatWidth = 450; const floatHeight = 600;
+        const leftPos = (window.innerWidth - floatWidth) / 2;
+        const topPos = Math.max(50, (window.innerHeight - floatHeight) / 2);
+        state.modal.style.width = `${floatWidth}px`; state.modal.style.height = "auto";
+        state.modal.style.left = `${leftPos}px`; state.modal.style.top = `${topPos}px`;
+        btnIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
+        btnIcon.title = "Sidebar";
+        header.style.cursor = "move";
+    }
+}
+
+function makeDraggable(element, handle) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    handle.onmousedown = dragMouseDown;
+    function dragMouseDown(e) {
+        if (state.isSidebarMode || e.target.closest('button')) return;
+        e = e || window.event; e.preventDefault();
+        pos3 = e.clientX; pos4 = e.clientY;
+        element.style.transition = 'none';
+        document.onmouseup = closeDragElement;
+        document.onmousemove = elementDrag;
+    }
+    function elementDrag(e) {
+        e = e || window.event; e.preventDefault();
+        pos1 = pos3 - e.clientX; pos2 = pos4 - e.clientY;
+        pos3 = e.clientX; pos4 = e.clientY;
+        element.style.top = (element.offsetTop - pos2) + "px";
+        element.style.left = (element.offsetLeft - pos1) + "px";
+    }
+    function closeDragElement() {
+        document.onmouseup = null; document.onmousemove = null;
+        element.style.transition = 'width 0.2s, height 0.2s, top 0.2s, left 0.2s';
+    }
+}
+
+function makeResizable(element, handle) {
+    handle.onmousedown = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        element.style.transition = 'none';
+        window.addEventListener('mousemove', resize);
+        window.addEventListener('mouseup', stopResize);
+    };
+    function resize(e) {
+        const newWidth = e.clientX - element.offsetLeft;
+        const newHeight = e.clientY - element.offsetTop;
+        if (newWidth > 300) element.style.width = newWidth + 'px';
+        if (newHeight > 200) element.style.height = newHeight + 'px';
+    }
+    function stopResize() {
+        window.removeEventListener('mousemove', resize);
+        window.removeEventListener('mouseup', stopResize);
+        element.style.transition = 'width 0.2s, height 0.2s, top 0.2s, left 0.2s';
+    }
+}
+
+function makeSidebarResizable(modal, handle) {
+    handle.onmousedown = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        document.body.style.cursor = 'col-resize';
+        modal.style.transition = 'none';
+        document.body.style.transition = 'none';
+        window.addEventListener('mousemove', resizeSidebar);
+        window.addEventListener('mouseup', stopResizeSidebar);
+    };
+    function resizeSidebar(e) {
+        if (!state.isSidebarMode) return;
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth > 300 && newWidth < window.innerWidth * 0.8) {
+            modal.style.width = newWidth + 'px';
+            document.body.style.marginRight = newWidth + 'px';
+        }
+    }
+    function stopResizeSidebar() {
+        document.body.style.cursor = 'default';
+        window.removeEventListener('mousemove', resizeSidebar);
+        window.removeEventListener('mouseup', stopResizeSidebar);
+        modal.style.transition = 'width 0.2s';
+        document.body.style.transition = 'margin-right 0.2s';
+    }
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+window.ASKGPT_CONTENT = Object.assign(window.ASKGPT_CONTENT || {}, {
+    toggleSidebar,
+    makeDraggable,
+    makeResizable,
+    makeSidebarResizable,
+    escapeHtml
+});

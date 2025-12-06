@@ -38,7 +38,14 @@
    {
     "matches": ["<all_urls>"],
     "js": [
-        "marked.min.js",  
+        "marked.min.js",
+        "src/content/state.js",
+        "src/content/extract.js",
+        "src/content/layout.js",
+        "src/content/modal.js",
+        "src/content/chat-client.js",
+        "src/content/floating-button.js",
+        "src/content/events.js",
         "content.js"
     ],
     "css": [   
