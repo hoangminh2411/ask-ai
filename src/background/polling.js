@@ -1,6 +1,4 @@
 // Polling logic to detect completion and fetch final HTML
-const { checkStatusInPage } = self.ASKGPT_BG;
-const { detachDebugger } = self.ASKGPT_BG;
 
 async function getFinalHTMLAndClose(windowId, tabId, initialCount, providerKey) {
     await chrome.windows.update(windowId, { focused: true, state: 'normal' });
@@ -39,7 +37,7 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
         try {
             const [{ result }] = await chrome.scripting.executeScript({
                 target: { tabId },
-                func: checkStatusInPage,
+                func: self.ASKGPT_BG.checkStatusInPage,
                 args: [initialCount, providerKey]
             });
 
@@ -88,7 +86,7 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
         } else {
             port.postMessage({ status: 'error', error: errorMsg });
         }
-        setTimeout(() => detachDebugger(tabId), 1000);
+        setTimeout(() => self.ASKGPT_BG.detachDebugger(tabId), 1000);
     }
 }
 

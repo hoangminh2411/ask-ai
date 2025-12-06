@@ -1,11 +1,10 @@
 // Send text to provider via debugger automation
-const { injectKeepAliveAudio, attachDebugger } = self.ASKGPT_BG;
 
 async function sendTextViaDebugger(windowId, tabId, text, providerKey) {
     try {
         await chrome.windows.update(windowId, { focused: true });
-        await injectKeepAliveAudio(tabId);
-        await attachDebugger(tabId);
+        await self.ASKGPT_BG.injectKeepAliveAudio(tabId);
+        await self.ASKGPT_BG.attachDebugger(tabId);
 
         await chrome.scripting.executeScript({
             target: { tabId },

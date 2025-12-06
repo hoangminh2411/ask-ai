@@ -1,31 +1,27 @@
 // Wire runtime and DOM events
-const { state } = window.ASKGPT_CONTENT;
-const { getPageContent } = window.ASKGPT_CONTENT;
-const { showModal } = window.ASKGPT_CONTENT;
-const { triggerAsk } = window.ASKGPT_CONTENT;
-const { createFloatingButton, removeFloatingButton } = window.ASKGPT_CONTENT;
+const CTX_EVENTS = window.ASKGPT_CONTENT;
 
 chrome.runtime.onMessage.addListener((request) => {
     if (request.action === "summarize_page") {
-        const pageText = getPageContent();
+        const pageText = CTX_EVENTS.getPageContent();
         if (!pageText || pageText.length < 50) {
             alert("Trang này quá ngắn hoặc không có nội dung văn bản.");
             return;
         }
 
-        showModal("Đang đọc nội dung trang web...", 100, 100);
+        CTX_EVENTS.showModal("Đang đọc nội dung trang web...", 100, 100);
 
-        if (!state.isSidebarMode) {
-            window.ASKGPT_CONTENT.toggleSidebar();
+        if (!CTX_EVENTS.state.isSidebarMode) {
+            CTX_EVENTS.toggleSidebar();
         }
 
-        triggerAsk("Tóm tắt các ý chính của trang web này (bỏ qua quảng cáo/menu):", pageText);
+        CTX_EVENTS.triggerAsk("Tóm tắt các ý chính của trang web này (bỏ qua quảng cáo/menu):", pageText);
     }
     else if (request.action === "trigger_modal_shortcut") {
         const selection = window.getSelection().toString().trim();
         const cx = window.innerWidth / 2 - 225;
         const cy = window.innerHeight / 2 - 300;
-        showModal(selection || "Xin chào, tôi có thể giúp gì cho bạn?", cx, cy);
+        CTX_EVENTS.showModal(selection || "Xin chào, tôi có thể giúp gì cho bạn?", cx, cy);
     }
 });
 
@@ -43,12 +39,12 @@ document.addEventListener('mouseup', (e) => {
         const clientX = rect.right + 5;
         const clientY = rect.top - 35;
 
-        createFloatingButton(pageX, pageY, clientX, clientY, text);
+        CTX_EVENTS.createFloatingButton(pageX, pageY, clientX, clientY, text);
     }
 });
 
 document.addEventListener('mousedown', (e) => {
     if (!e.target.closest('#askgpt-floating-btn') && !e.target.closest('#askgpt-modal')) {
-        removeFloatingButton();
+        CTX_EVENTS.removeFloatingButton();
     }
 });

@@ -1,8 +1,7 @@
 // Window/tab reuse for provider popups
-const { MANAGERS } = self.ASKGPT_BG;
 
 async function ensureWindow(providerKey, port) {
-    const mgr = MANAGERS[providerKey];
+    const mgr = self.ASKGPT_BG.MANAGERS[providerKey];
     if (!mgr) throw new Error("Unknown Provider");
 
     if (mgr.windowId) {

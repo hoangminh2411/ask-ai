@@ -1,10 +1,4 @@
 // Main port controller: route provider (API vs web) and orchestrate send/poll
-const { MANAGERS } = self.ASKGPT_BG;
-const { ensureWindow } = self.ASKGPT_BG;
-const { getMessageCount } = self.ASKGPT_BG;
-const { sendTextViaDebugger } = self.ASKGPT_BG;
-const { pollUntilDone } = self.ASKGPT_BG;
-const { handleGeminiAPI } = self.ASKGPT_BG;
 
 chrome.runtime.onConnect.addListener(async (port) => {
     if (port.name !== "ask-gpt-port") return;
@@ -15,16 +9,16 @@ chrome.runtime.onConnect.addListener(async (port) => {
 
         try {
             if (provider === 'gemini_api') {
-                await handleGeminiAPI(port, request.query, config.geminiApiKey);
+                await self.ASKGPT_BG.handleGeminiAPI(port, request.query, config.geminiApiKey);
                 return;
             }
 
-            const winData = await ensureWindow(provider, port);
-            const initialCount = await getMessageCount(winData.tabId, provider);
+            const winData = await self.ASKGPT_BG.ensureWindow(provider, port);
+            const initialCount = await self.ASKGPT_BG.getMessageCount(winData.tabId, provider);
 
             port.postMessage({ status: 'progress', message: "Đang nhập..." });
 
-            const sendRes = await sendTextViaDebugger(winData.windowId, winData.tabId, request.query, provider);
+            const sendRes = await self.ASKGPT_BG.sendTextViaDebugger(winData.windowId, winData.tabId, request.query, provider);
             if (sendRes.error) throw new Error(sendRes.error);
 
             port.postMessage({ status: 'progress', message: "Đợi phản hồi..." });
@@ -53,7 +47,7 @@ chrome.runtime.onConnect.addListener(async (port) => {
                 waitAttempts++;
             }
 
-            pollUntilDone(winData.windowId, winData.tabId, initialCount, provider, port);
+            self.ASKGPT_BG.pollUntilDone(winData.windowId, winData.tabId, initialCount, provider, port);
 
         } catch (err) {
             console.error(err);

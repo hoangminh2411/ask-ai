@@ -1,5 +1,4 @@
 // Context menu and shortcuts wiring
-const { MANAGERS, activeDebuggers } = self.ASKGPT_BG;
 
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
@@ -27,8 +26,8 @@ chrome.commands.onCommand.addListener((command) => {
 
 chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === "config_updated") {
-        activeDebuggers.clear();
-        MANAGERS.chatgpt_web.windowId = null;
-        MANAGERS.gemini_web.windowId = null;
+        self.ASKGPT_BG.activeDebuggers.clear();
+        self.ASKGPT_BG.MANAGERS.chatgpt_web.windowId = null;
+        self.ASKGPT_BG.MANAGERS.gemini_web.windowId = null;
     }
 });

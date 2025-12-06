@@ -1,6 +1,5 @@
 // Modal rendering and binding logic
-const { state } = window.ASKGPT_CONTENT;
-const { toggleSidebar, makeDraggable, makeResizable, makeSidebarResizable, escapeHtml } = window.ASKGPT_CONTENT;
+const CTX_MODAL = window.ASKGPT_CONTENT;
 
 function resetModalState() {
     document.getElementById('askgpt-result').innerHTML = "";
@@ -9,20 +8,20 @@ function resetModalState() {
 }
 
 function bindActionButtons(currentText) {
-    if (!state.modal) return;
-    const chips = state.modal.querySelectorAll('.askgpt-chip');
+    if (!CTX_MODAL.state.modal) return;
+    const chips = CTX_MODAL.state.modal.querySelectorAll('.askgpt-chip');
     chips.forEach(chip => {
         const newChip = chip.cloneNode(true);
         chip.parentNode.replaceChild(newChip, chip);
         newChip.onclick = () => {
             const prompt = newChip.getAttribute('data-prompt');
-            window.ASKGPT_CONTENT.triggerAsk(prompt, currentText);
+            CTX_MODAL.triggerAsk(prompt, currentText);
         };
     });
 }
 
 function showModal(text, clientX, clientY) {
-    if (state.modal) {
+    if (CTX_MODAL.state.modal) {
         const quoteDiv = document.getElementById('askgpt-quote');
         if (quoteDiv) quoteDiv.innerText = `"${text.substring(0, 200)}${text.length > 200 ? '...' : ''}"`;
         if (quoteDiv) quoteDiv.dataset.fullText = text;
@@ -31,8 +30,8 @@ function showModal(text, clientX, clientY) {
         return;
     }
 
-    state.modal = document.createElement('div');
-    state.modal.id = 'askgpt-modal';
+    CTX_MODAL.state.modal = document.createElement('div');
+    CTX_MODAL.state.modal.id = 'askgpt-modal';
 
     const modalW = 450; const modalH = 600; const pad = 20;
     const vw = window.innerWidth; const vh = window.innerHeight;
@@ -43,10 +42,10 @@ function showModal(text, clientX, clientY) {
     if (top + modalH > vh) top = vh - modalH - pad;
     if (top < pad) top = pad;
 
-    state.modal.style.left = `${left}px`;
-    state.modal.style.top = `${top}px`;
+    CTX_MODAL.state.modal.style.left = `${left}px`;
+    CTX_MODAL.state.modal.style.top = `${top}px`;
 
-    state.modal.innerHTML = `
+    CTX_MODAL.state.modal.innerHTML = `
         <div id="askgpt-sidebar-resizer"></div>
         <div id="askgpt-header">
             <div id="askgpt-title">dY- Ask AI Assistant</div>
@@ -60,7 +59,7 @@ function showModal(text, clientX, clientY) {
             </div>
         </div>
         <div id="askgpt-body">
-            <div id="askgpt-quote" data-full-text="${escapeHtml(text)}">"${escapeHtml(text.substring(0, 150))}${text.length > 150 ? '...' : ''}"</div>
+            <div id="askgpt-quote" data-full-text="${CTX_MODAL.escapeHtml(text)}">"${CTX_MODAL.escapeHtml(text.substring(0, 150))}${text.length > 150 ? '...' : ''}"</div>
 
             <div class="askgpt-input-group">
                 <input type="text" id="askgpt-custom-input" placeholder="Hỏi thêm hoặc nhập lệnh riêng...">
@@ -83,29 +82,29 @@ function showModal(text, clientX, clientY) {
         </div>
     `;
 
-    document.body.appendChild(state.modal);
+    document.body.appendChild(CTX_MODAL.state.modal);
 
     const header = document.getElementById('askgpt-header');
     const resizer = document.getElementById('askgpt-resizer');
     const sidebarResizer = document.getElementById('askgpt-sidebar-resizer');
 
-    makeDraggable(state.modal, header);
-    makeResizable(state.modal, resizer);
-    makeSidebarResizable(state.modal, sidebarResizer);
+    CTX_MODAL.makeDraggable(CTX_MODAL.state.modal, header);
+    CTX_MODAL.makeResizable(CTX_MODAL.state.modal, resizer);
+    CTX_MODAL.makeSidebarResizable(CTX_MODAL.state.modal, sidebarResizer);
 
     document.getElementById('askgpt-close').onclick = () => {
-        if (state.modal) {
-            if (state.isSidebarMode) document.body.style.marginRight = state.originalBodyMargin;
-            state.modal.remove(); state.modal = null; state.isSidebarMode = false;
+        if (CTX_MODAL.state.modal) {
+            if (CTX_MODAL.state.isSidebarMode) document.body.style.marginRight = CTX_MODAL.state.originalBodyMargin;
+            CTX_MODAL.state.modal.remove(); CTX_MODAL.state.modal = null; CTX_MODAL.state.isSidebarMode = false;
         }
     };
-    document.getElementById('askgpt-dock-btn').onclick = toggleSidebar;
+    document.getElementById('askgpt-dock-btn').onclick = CTX_MODAL.toggleSidebar;
 
     const customInput = document.getElementById('askgpt-custom-input');
     customInput.onkeydown = (e) => {
         if (e.key === 'Enter' && customInput.value.trim()) {
             const fullText = document.getElementById('askgpt-quote').dataset.fullText || "";
-            window.ASKGPT_CONTENT.triggerAsk(customInput.value.trim(), fullText);
+            CTX_MODAL.triggerAsk(customInput.value.trim(), fullText);
             customInput.value = "";
         }
     };
@@ -113,8 +112,6 @@ function showModal(text, clientX, clientY) {
     bindActionButtons(text);
 }
 
-window.ASKGPT_CONTENT = Object.assign(window.ASKGPT_CONTENT || {}, {
-    showModal,
-    resetModalState,
-    bindActionButtons
-});
+CTX_MODAL.showModal = showModal;
+CTX_MODAL.resetModalState = resetModalState;
+CTX_MODAL.bindActionButtons = bindActionButtons;

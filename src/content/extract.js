@@ -1,5 +1,5 @@
 // Page extraction helpers
-const { state } = window.ASKGPT_CONTENT;
+const CTX_EXTRACT = window.ASKGPT_CONTENT;
 
 function getPageContent() {
     const article = document.querySelector('article') || document.querySelector('main') || document.querySelector('[role="main"]');
@@ -23,4 +23,4 @@ function getPageContent() {
     return content.trim().substring(0, 15000);
 }
 
-window.ASKGPT_CONTENT.getPageContent = getPageContent;
+CTX_EXTRACT.getPageContent = getPageContent;
