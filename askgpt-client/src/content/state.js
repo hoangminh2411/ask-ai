@@ -5,5 +5,6 @@ window.ASKGPT_CONTENT.state = {
     modal: null,
     isSidebarMode: false,
     originalBodyMargin: "",
-    currentBotMsgDiv: null
+    currentBotMsgDiv: null,
+    modalClosedManually: false
 };

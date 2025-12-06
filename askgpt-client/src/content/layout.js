@@ -1,10 +1,25 @@
 // Layout helpers: sidebar toggle and resize/drag behaviors
+window.ASKGPT_CONTENT = window.ASKGPT_CONTENT || {};
+if (window.ASKGPT_CONTENT.__layoutLoaded) {
+    if (!window.ASKGPT_CONTENT.__layoutWarned) {
+        window.ASKGPT_CONTENT.__layoutWarned = true;
+        console.debug("ASKGPT layout script already loaded; skipping.");
+    }
+} else {
 const CTX_LAYOUT = window.ASKGPT_CONTENT;
 
 function toggleSidebar() {
-    if (!CTX_LAYOUT.state.modal) return;
-    CTX_LAYOUT.state.isSidebarMode = !CTX_LAYOUT.state.isSidebarMode;
-    const btnIcon = CTX_LAYOUT.state.modal.querySelector('#askgpt-dock-btn');
+    const modal = CTX_LAYOUT.state.modal || document.getElementById('askgpt-modal');
+    if (!modal) {
+        console.debug("ASKGPT toggleSidebar: modal missing");
+        return;
+    }
+    CTX_LAYOUT.state.modal = modal;
+    const currentlySidebar = modal.classList.contains('sidebar-mode');
+    CTX_LAYOUT.state.isSidebarMode = !currentlySidebar;
+    console.debug("ASKGPT toggleSidebar state", { sidebar: CTX_LAYOUT.state.isSidebarMode });
+
+    const btnIcon = modal.querySelector('#askgpt-dock-btn');
     const header = document.getElementById('askgpt-header');
 
     if (CTX_LAYOUT.state.isSidebarMode) {
@@ -28,6 +43,9 @@ function toggleSidebar() {
         btnIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
         btnIcon.title = "Sidebar";
         header.style.cursor = "move";
+        // ensure modal stays on screen after undocking
+        CTX_LAYOUT.state.modal.style.top = `${Math.max(20, parseFloat(CTX_LAYOUT.state.modal.style.top) || topPos)}px`;
+        CTX_LAYOUT.state.modal.style.left = `${Math.max(10, parseFloat(CTX_LAYOUT.state.modal.style.left) || leftPos)}px`;
     }
 }
 
@@ -110,3 +128,7 @@ CTX_LAYOUT.makeDraggable = makeDraggable;
 CTX_LAYOUT.makeResizable = makeResizable;
 CTX_LAYOUT.makeSidebarResizable = makeSidebarResizable;
 CTX_LAYOUT.escapeHtml = escapeHtml;
+
+window.ASKGPT_CONTENT.__layoutLoaded = true;
+window.ASKGPT_CONTENT.__layoutWarned = true;
+} // end guard

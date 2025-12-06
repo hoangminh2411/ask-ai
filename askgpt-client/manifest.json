@@ -1,10 +1,19 @@
-{
+﻿{
   "manifest_version": 3,
   "name": "AskGPT - Ghost Mode (Multi-Provider)",
   "version": "3.0",
-  "description": "Hỏi ChatGPT và Gemini (Web & API) trực tiếp trên trang web.",
+  "description": "Ask ChatGPT and Gemini (Web & API) directly on webpages.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
     "activeTab",
+    "tabs",
+    "tabCapture",
+    "clipboardWrite",
     "scripting",
     "storage",
     "debugger",
@@ -16,18 +25,30 @@
     "https://generativelanguage.googleapis.com/*"
   ],
   "commands": {
-      "summarize-page": {
-        "suggested_key": {
-          "default": "Alt+S",
-          "mac": "Alt+S"
-        },
-        "description": "Tóm tắt trang web hiện tại"
-      }
+    "summarize-page": {
+      "suggested_key": {
+        "default": "Alt+S",
+        "mac": "Alt+S"
+      },
+      "description": "Summarize the current page"
+    },
+    "capture-image": {
+      "suggested_key": {
+        "default": "Alt+A",
+        "mac": "Alt+A"
+      },
+      "description": "Capture a screenshot region for AskGPT"
+    }
   },
   "background": {
     "service_worker": "background.js"
   },
   "action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    },
     "default_popup": "popup.html"
   },
   "options_ui": {
@@ -35,9 +56,9 @@
     "open_in_tab": false
   },
   "content_scripts": [
-   {
-    "matches": ["<all_urls>"],
-    "js": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
         "marked.min.js",
         "src/content/state.js",
         "src/content/extract.js",
@@ -46,12 +67,13 @@
         "src/content/chat-client.js",
         "src/content/floating-button.js",
         "src/content/events.js",
+        "src/content/image-capture.js",
         "content.js"
     ],
-    "css": [   
+      "css": [
         "content.css"
-    ]
-  }
+      ]
+    }
   ],
   "web_accessible_resources": [
     {

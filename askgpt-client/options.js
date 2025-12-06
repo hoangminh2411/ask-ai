@@ -1,16 +1,16 @@
-const providerSelect = document.getElementById('provider');
+﻿const providerSelect = document.getElementById('provider');
 const apiGroup = document.getElementById('api-group');
 const apiKeyInput = document.getElementById('apiKey');
 const statusDiv = document.getElementById('status');
 
-// 1. Load setting cũ
+// 1. Load saved settings
 chrome.storage.sync.get(['provider', 'geminiApiKey'], (items) => {
     if (items.provider) providerSelect.value = items.provider;
     if (items.geminiApiKey) apiKeyInput.value = items.geminiApiKey;
     toggleApiInput();
 });
 
-// 2. Ẩn hiện ô nhập Key
+// 2. Show/hide API key input based on provider
 providerSelect.addEventListener('change', toggleApiInput);
 
 function toggleApiInput() {
@@ -21,7 +21,7 @@ function toggleApiInput() {
     }
 }
 
-// 3. Lưu setting
+// 3. Save settings
 document.getElementById('save').addEventListener('click', () => {
     const config = {
         provider: providerSelect.value,
@@ -29,10 +29,10 @@ document.getElementById('save').addEventListener('click', () => {
     };
     
     chrome.storage.sync.set(config, () => {
-        statusDiv.innerText = "✅ Đã lưu thành công!";
+        statusDiv.innerText = "Saved successfully!";
         setTimeout(() => statusDiv.innerText = "", 2000);
         
-        // Gửi tin nhắn báo background reset kết nối
+        // Notify background to refresh connections
         chrome.runtime.sendMessage({ action: "config_updated" });
     });
 });

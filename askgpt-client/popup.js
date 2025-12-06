@@ -1,15 +1,15 @@
-const port = chrome.runtime.connect({ name: "ask-gpt-port" });
+﻿const port = chrome.runtime.connect({ name: "ask-gpt-port" });
 let currentSelection = "";
 const statusDiv = document.getElementById('status');
 const answerDiv = document.getElementById('answer');
 const quoteDiv = document.getElementById('selected-text');
 
-// 1. Mở trang Options khi bấm nút Gear
+// 1. Open options when clicking the gear button
 document.getElementById('open-settings').addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
 });
 
-// 2. Lấy text bôi đen
+// 2. Get selected text from the active tab
 chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     chrome.scripting.executeScript({
         target: { tabId: tabs[0].id },
@@ -19,21 +19,21 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             currentSelection = results[0].result.trim();
             quoteDiv.innerText = currentSelection;
         } else {
-            quoteDiv.innerText = "(Hãy bôi đen văn bản trên trang web trước khi mở Popup)";
+            quoteDiv.innerText = "Please select some text on the page before opening the popup.";
             quoteDiv.style.color = "#dc2626";
             quoteDiv.style.fontStyle = "normal";
         }
     });
 });
 
-// 3. Bắt sự kiện click nút action
+// 3. Handle quick action buttons
 document.querySelectorAll('.btn-action').forEach(btn => {
     btn.addEventListener('click', () => {
         if (!currentSelection) return;
         document.querySelectorAll('.btn-action').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         statusDiv.classList.add('show');
-        statusDiv.innerText = "⏳ Đang xử lý...";
+        statusDiv.innerText = "Processing...";
         statusDiv.classList.remove('error');
         answerDiv.innerHTML = "";
 
@@ -43,10 +43,10 @@ document.querySelectorAll('.btn-action').forEach(btn => {
     });
 });
 
-// 4. Nhận kết quả
+// 4. Receive results
 port.onMessage.addListener((msg) => {
     if (msg.status === 'progress') {
-        statusDiv.innerText = "🤖 " + msg.message;
+        statusDiv.innerText = "Progress: " + msg.message;
     } 
     else if (msg.status === 'success') {
         statusDiv.classList.remove('show');
@@ -58,7 +58,7 @@ port.onMessage.addListener((msg) => {
         }
     } 
     else if (msg.status === 'error') {
-        statusDiv.innerText = "❌ " + msg.error;
+        statusDiv.innerText = "Error: " + msg.error;
         statusDiv.classList.add('error');
     }
 });

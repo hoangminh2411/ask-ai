@@ -1,4 +1,11 @@
 // Page extraction helpers
+window.ASKGPT_CONTENT = window.ASKGPT_CONTENT || {};
+if (window.ASKGPT_CONTENT.__extractLoaded) {
+    if (!window.ASKGPT_CONTENT.__extractWarned) {
+        window.ASKGPT_CONTENT.__extractWarned = true;
+        console.debug("ASKGPT extract script already loaded; skipping.");
+    }
+} else {
 const CTX_EXTRACT = window.ASKGPT_CONTENT;
 
 function getPageContent() {
@@ -24,3 +31,7 @@ function getPageContent() {
 }
 
 CTX_EXTRACT.getPageContent = getPageContent;
+
+window.ASKGPT_CONTENT.__extractLoaded = true;
+window.ASKGPT_CONTENT.__extractWarned = true;
+} // end guard

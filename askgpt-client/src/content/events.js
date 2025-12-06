@@ -1,27 +1,44 @@
 // Wire runtime and DOM events
+window.ASKGPT_CONTENT = window.ASKGPT_CONTENT || {};
+if (window.ASKGPT_CONTENT.__eventsLoaded) {
+    if (!window.ASKGPT_CONTENT.__eventsWarned) {
+        window.ASKGPT_CONTENT.__eventsWarned = true;
+        console.debug("ASKGPT events script already loaded; skipping.");
+    }
+} else {
 const CTX_EVENTS = window.ASKGPT_CONTENT;
 
-chrome.runtime.onMessage.addListener((request) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     if (request.action === "summarize_page") {
         const pageText = CTX_EVENTS.getPageContent();
         if (!pageText || pageText.length < 50) {
-            alert("Trang này quá ngắn hoặc không có nội dung văn bản.");
+            alert("This page is too short or has no visible content.");
+            sendResponse?.({ ok: false, error: "too_short" });
             return;
         }
 
-        CTX_EVENTS.showModal("Đang đọc nội dung trang web...", 100, 100);
+        CTX_EVENTS.showModal("Reading page content...", 100, 100);
 
         if (!CTX_EVENTS.state.isSidebarMode) {
             CTX_EVENTS.toggleSidebar();
         }
 
-        CTX_EVENTS.triggerAsk("Tóm tắt các ý chính của trang web này (bỏ qua quảng cáo/menu):", pageText);
+        CTX_EVENTS.triggerAsk("Summarize the key points of this page (ignore ads/menus):", pageText);
+        sendResponse?.({ ok: true });
+        return true;
     }
     else if (request.action === "trigger_modal_shortcut") {
         const selection = window.getSelection().toString().trim();
         const cx = window.innerWidth / 2 - 225;
         const cy = window.innerHeight / 2 - 300;
-        CTX_EVENTS.showModal(selection || "Xin chào, tôi có thể giúp gì cho bạn?", cx, cy);
+        CTX_EVENTS.showModal(selection || "Hi there, how can I help?", cx, cy);
+        sendResponse?.({ ok: true });
+        return true;
+    }
+    else if (request.action === "start_image_capture") {
+        CTX_EVENTS.startImageCapture();
+        sendResponse?.({ ok: true });
+        return true;
     }
 });
 
@@ -48,3 +65,7 @@ document.addEventListener('mousedown', (e) => {
         CTX_EVENTS.removeFloatingButton();
     }
 });
+
+window.ASKGPT_CONTENT.__eventsLoaded = true;
+window.ASKGPT_CONTENT.__eventsWarned = true;
+} // end guard

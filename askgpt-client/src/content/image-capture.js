@@ -1,0 +1,594 @@
+// Screen capture overlay and prompt flow
+window.ASKGPT_CONTENT = window.ASKGPT_CONTENT || {};
+if (window.ASKGPT_CONTENT.__captureLoaded) {
+    if (!window.ASKGPT_CONTENT.__captureWarned) {
+        window.ASKGPT_CONTENT.__captureWarned = true;
+        console.debug("ASKGPT capture script already loaded; skipping.");
+    }
+} else {
+const CTX_CAPTURE = window.ASKGPT_CONTENT;
+
+const CAPTURE_STATE = {
+    overlay: null,
+    selectionBox: null,
+    start: null,
+    pendingRect: null,
+    lastRect: null,
+    escHandler: null,
+    toolboxEscHandler: null,
+    lastCaptureDataUrl: null,
+    lastUploadUrl: null,
+    uploading: false,
+    overlayHidden: false,
+    handledCapture: false,
+    hasDragged: false
+};
+
+function forceRemoveCaptureDom() {
+    document.querySelectorAll('#askgpt-capture-overlay, #askgpt-capture-box, .askgpt-capture-toolbox').forEach((el) => el.remove());
+    // Ensure page interactions re-enable if any capture overlay tweaked them.
+    document.body.style.pointerEvents = '';
+}
+
+function hardResetCaptureState() {
+    stopCaptureInteraction();
+    removeToolbox();
+    forceRemoveCaptureDom();
+    CAPTURE_STATE.overlay = null;
+    CAPTURE_STATE.selectionBox = null;
+    CAPTURE_STATE.start = null;
+    CAPTURE_STATE.pendingRect = null;
+    CAPTURE_STATE.lastRect = null;
+    CAPTURE_STATE.overlayHidden = false;
+    CAPTURE_STATE.handledCapture = false;
+    CAPTURE_STATE.hasDragged = false;
+}
+
+function startImageCapture() {
+    // If a stale overlay/toolbox was left behind, clean it up so capture can proceed.
+    if (CAPTURE_STATE.overlay) {
+        if (!CAPTURE_STATE.handledCapture && CAPTURE_STATE.pendingRect) {
+            showToast('Capture already in progress. Press Esc to cancel.', 2000);
+            return;
+        }
+        hardResetCaptureState();
+    }
+    // Avoid stacking multiple capture poppers/toolboxes from prior runs.
+    removeToolbox();
+    forceRemoveCaptureDom();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'askgpt-capture-overlay';
+    overlay.innerHTML = `
+        <div class="askgpt-capture-instructions">
+            <span>Select an area to capture. Esc to cancel.</span>
+            <button id="askgpt-capture-cancel">Cancel</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const box = document.createElement('div');
+    box.id = 'askgpt-capture-box';
+    overlay.appendChild(box);
+
+    CAPTURE_STATE.overlay = overlay;
+    CAPTURE_STATE.selectionBox = box;
+
+    overlay.addEventListener('mousedown', onMouseDown);
+    overlay.addEventListener('mousemove', onMouseMove);
+    overlay.addEventListener('mouseup', onMouseUp);
+    document.getElementById('askgpt-capture-cancel').addEventListener('click', cleanupCapture);
+
+    CAPTURE_STATE.escHandler = (e) => { if (e.key === 'Escape') cleanupCapture(); };
+    document.addEventListener('keydown', CAPTURE_STATE.escHandler);
+}
+
+function onMouseDown(e) {
+    e.preventDefault();
+    CAPTURE_STATE.handledCapture = false;
+    CAPTURE_STATE.hasDragged = false;
+    CAPTURE_STATE.start = { x: e.clientX, y: e.clientY };
+    CAPTURE_STATE.selectionBox.style.display = 'block';
+    CAPTURE_STATE.selectionBox.style.left = `${CAPTURE_STATE.start.x}px`;
+    CAPTURE_STATE.selectionBox.style.top = `${CAPTURE_STATE.start.y}px`;
+    CAPTURE_STATE.selectionBox.style.width = '0px';
+    CAPTURE_STATE.selectionBox.style.height = '0px';
+}
+
+function onMouseMove(e) {
+    if (!CAPTURE_STATE.start) return;
+    const delta = Math.abs(e.clientX - CAPTURE_STATE.start.x) + Math.abs(e.clientY - CAPTURE_STATE.start.y);
+    if (delta > 3) CAPTURE_STATE.hasDragged = true;
+    const x = Math.min(e.clientX, CAPTURE_STATE.start.x);
+    const y = Math.min(e.clientY, CAPTURE_STATE.start.y);
+    const w = Math.abs(e.clientX - CAPTURE_STATE.start.x);
+    const h = Math.abs(e.clientY - CAPTURE_STATE.start.y);
+    CAPTURE_STATE.selectionBox.style.left = `${x}px`;
+    CAPTURE_STATE.selectionBox.style.top = `${y}px`;
+    CAPTURE_STATE.selectionBox.style.width = `${w}px`;
+    CAPTURE_STATE.selectionBox.style.height = `${h}px`;
+    CAPTURE_STATE.lastRect = { left: x, top: y, width: w, height: h };
+}
+
+function onMouseUp(e) {
+    if (!CAPTURE_STATE.start) return;
+    if (!CAPTURE_STATE.hasDragged) {
+        cleanupCapture();
+        return;
+    }
+    const x = Math.min(e.clientX, CAPTURE_STATE.start.x);
+    const y = Math.min(e.clientY, CAPTURE_STATE.start.y);
+    const w = Math.abs(e.clientX - CAPTURE_STATE.start.x);
+    const h = Math.abs(e.clientY - CAPTURE_STATE.start.y);
+    CAPTURE_STATE.start = null;
+
+    if (w < 5 || h < 5) {
+        cleanupCapture();
+        return;
+    }
+
+    // Use DOMRect-like keys so downstream cropping logic works when the overlay is hidden.
+    CAPTURE_STATE.pendingRect = { left: x, top: y, width: w, height: h };
+    CAPTURE_STATE.lastRect = CAPTURE_STATE.pendingRect;
+    hideOverlayForCapture();
+    requestVisibleCapture();
+}
+
+function requestVisibleCapture() {
+    try {
+        chrome.runtime.sendMessage({ action: 'capture_visible' }, () => {
+            const lastError = chrome.runtime.lastError;
+            if (lastError) {
+                console.error('Capture request failed:', lastError.message);
+                notifyCaptureError(lastError.message);
+                cleanupCapture();
+                showOverlayAfterCapture();
+            }
+        });
+    } catch (err) {
+        console.error('Capture request exception:', err);
+        notifyCaptureError('Capture not available on this page.');
+        cleanupCapture();
+        showOverlayAfterCapture();
+    }
+
+    // Wait for background to respond with the data URL
+}
+
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === 'capture_result' && msg.dataUrl && CAPTURE_STATE.overlay) {
+        if (CAPTURE_STATE.handledCapture) return;
+        const liveRect = CAPTURE_STATE.selectionBox ? CAPTURE_STATE.selectionBox.getBoundingClientRect() : null;
+        const rect = CAPTURE_STATE.pendingRect || CAPTURE_STATE.lastRect || (liveRect ? { left: liveRect.left, top: liveRect.top, width: liveRect.width, height: liveRect.height } : null);
+        if (!rect || !rect.width || !rect.height) {
+            CAPTURE_STATE.handledCapture = true;
+            console.warn('Capture result received without a valid rect');
+            notifyCaptureError('No selection detected. Please drag to select an area.');
+            cleanupCapture();
+            return;
+        }
+        CAPTURE_STATE.handledCapture = true;
+        showOverlayAfterCapture();
+        cropDataUrl(msg.dataUrl, rect).then((cropped) => {
+            CAPTURE_STATE.lastCaptureDataUrl = cropped;
+            const rectCopy = rect ? { top: rect.top, left: rect.left, height: rect.height, width: rect.width } : null;
+            copyImageToClipboard(cropped)
+                .then(() => showToast('Image copied. Press Ctrl+V in chat to paste.'))
+                .catch(() => showToast('Copy failed. Use the preview to save or forward.'))
+                .finally(() => {
+                    stopCaptureInteraction();
+                    cleanupCapture();
+                    if (rectCopy) {
+                        showCaptureToolbox(cropped, rectCopy);
+                    }
+                });
+        }).catch((err) => {
+            console.error('Crop failed', err);
+            notifyCaptureError('Could not crop captured image.');
+            cleanupCapture();
+        });
+    } else if (msg.action === 'capture_result_error' && CAPTURE_STATE.overlay) {
+        notifyCaptureError(msg.error || 'Capture failed.');
+        cleanupCapture();
+        showOverlayAfterCapture();
+    }
+});
+
+function cropDataUrl(dataUrl, rect) {
+    if (!rect) return Promise.reject(new Error('No selection rectangle'));
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const ratioX = img.width / window.innerWidth;
+            const ratioY = img.height / window.innerHeight;
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(rect.width * ratioX));
+            canvas.height = Math.max(1, Math.round(rect.height * ratioY));
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(
+                img,
+                rect.left * ratioX,
+                rect.top * ratioY,
+                rect.width * ratioX,
+                rect.height * ratioY,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
+}
+
+function showCaptureToolbox(imageDataUrl, rect) {
+    // Ensure no stale overlay blocks clicks on the toolbox.
+    if (CAPTURE_STATE.overlay) {
+        CAPTURE_STATE.overlay.remove();
+        CAPTURE_STATE.overlay = null;
+    }
+    forceRemoveCaptureDom();
+    removeToolbox();
+    const toolbox = document.createElement('div');
+    toolbox.className = 'askgpt-capture-toolbox';
+    const top = Math.max(12, rect.top + rect.height + 8);
+    const left = Math.max(12, rect.left);
+    toolbox.style.top = `${top}px`;
+    toolbox.style.left = `${left}px`;
+    toolbox.innerHTML = `
+        <img src="${imageDataUrl}" alt="capture thumbnail" />
+        <div style="display:flex; flex-direction:column; gap:6px;">
+            <div style="font-size:12px; font-weight:700;">Image ready (copied)</div>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px;">
+                <input type="checkbox" id="askgpt-tool-autopaste-chk" />
+                <span>Auto paste (debug)</span>
+            </label>
+            <div class="actions">
+                <button id="askgpt-tool-link" class="secondary">Get link</button>
+                <button id="askgpt-tool-explain">Explain</button>
+                <button id="askgpt-tool-similar" class="secondary">Find similar</button>
+                <button id="askgpt-tool-retake" class="secondary">Retake</button>
+                <button id="askgpt-tool-close" class="danger">Close</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(toolbox);
+
+    const linkBtn = document.getElementById('askgpt-tool-link');
+    const resetLinkBtn = () => {
+        linkBtn.disabled = false;
+        linkBtn.textContent = CAPTURE_STATE.lastUploadUrl ? 'Copy link' : 'Get link';
+    };
+    resetLinkBtn();
+    linkBtn.onclick = async () => {
+        if (CAPTURE_STATE.uploading) {
+            showToast('Upload in progress...', 1800);
+            return;
+        }
+        if (CAPTURE_STATE.lastUploadUrl) {
+            navigator.clipboard?.writeText?.(CAPTURE_STATE.lastUploadUrl).catch(() => {});
+            showToast('Link copied: ' + CAPTURE_STATE.lastUploadUrl, 2400);
+            return;
+        }
+        linkBtn.disabled = true;
+        linkBtn.textContent = 'Uploading...';
+        try {
+            const url = await handleUploadLink(imageDataUrl);
+            if (url) linkBtn.textContent = 'Copy link';
+        } finally {
+            resetLinkBtn();
+        }
+    };
+    document.getElementById('askgpt-tool-explain').onclick = () => {
+        sendImageIntent('explain').finally(cleanupCapture);
+    };
+    document.getElementById('askgpt-tool-similar').onclick = () => {
+        sendImageIntent('similar').finally(cleanupCapture);
+    };
+    const chk = document.getElementById('askgpt-tool-autopaste-chk');
+    chk.onchange = () => {
+        if (chk.checked) triggerAutoPaste();
+    };
+    document.getElementById('askgpt-tool-retake').onclick = () => {
+        removeToolbox();
+        startImageCapture();
+    };
+    document.getElementById('askgpt-tool-close').onclick = () => {
+        removeToolbox();
+        cleanupCapture();
+    };
+
+    // Allow closing the popper with Esc to avoid getting stuck.
+    if (CAPTURE_STATE.toolboxEscHandler) {
+        document.removeEventListener('keydown', CAPTURE_STATE.toolboxEscHandler);
+    }
+    CAPTURE_STATE.toolboxEscHandler = (e) => {
+        if (e.key === 'Escape') {
+            removeToolbox();
+            cleanupCapture();
+        }
+    };
+    document.addEventListener('keydown', CAPTURE_STATE.toolboxEscHandler);
+}
+
+function removeToolbox() {
+    const existing = document.querySelector('.askgpt-capture-toolbox');
+    if (existing) existing.remove();
+    if (CAPTURE_STATE.toolboxEscHandler) {
+        document.removeEventListener('keydown', CAPTURE_STATE.toolboxEscHandler);
+        CAPTURE_STATE.toolboxEscHandler = null;
+    }
+}
+
+async function sendImageIntent(mode) {
+    const actionText = mode === 'similar' ? 'Find similar images' : 'Explain this image';
+    const chk = document.getElementById('askgpt-tool-autopaste-chk');
+    let attached = false;
+    if (CAPTURE_STATE.lastCaptureDataUrl) {
+        showToast('Attaching image to chat...');
+        attached = await attachImageToPage(CAPTURE_STATE.lastCaptureDataUrl).catch(() => false);
+    }
+    if (!attached) {
+        if (chk && chk.checked) {
+            triggerAutoPaste();
+        } else {
+            showToast('Image copied. Press Ctrl+V in ChatGPT/Gemini to paste, then hit Send.');
+        }
+    } else {
+        showToast('Image attached. Add your prompt and send.');
+    }
+
+    // Make sure no capture UI (overlay/toolbox) sits above the modal that opens next.
+    removeToolbox();
+    cleanupCapture();
+    forceRemoveCaptureDom();
+    // Slight delay so DOM removal finishes before modal is created.
+    setTimeout(() => {
+        // Guard against toolbox re-showing after modal; ensure nothing sits above modal.
+        forceRemoveCaptureDom();
+        const cx = window.innerWidth / 2 - 225;
+        const cy = window.innerHeight / 2 - 300;
+        const linkNote = CAPTURE_STATE.lastUploadUrl ? `\nImage URL: ${CAPTURE_STATE.lastUploadUrl}\n(If paste fails, fetch this URL to view the image.)` : '';
+        CTX_CAPTURE.showModal(`Paste the captured image into chat, then request: ${actionText}.${linkNote ? '\n\nA shareable link is also ready.' : ''}`, cx, cy);
+        CTX_CAPTURE.triggerAsk(`User will paste an image into chat. Please be ready to ${actionText.toLowerCase()} once the image is pasted.${linkNote ? '\n' + linkNote : ''}`, '');
+        console.debug("ASKGPT capture -> modal opened");
+    }, 50);
+}
+
+function triggerAutoPaste() {
+    showToast('Attempting auto paste (debug)...');
+    chrome.runtime.sendMessage({ action: 'debug_paste' }, (resp) => {
+        if (resp && resp.ok) {
+            showToast('Auto paste sent. If allowed, image should appear in chat.');
+        } else {
+            const msg = resp?.error || chrome.runtime.lastError?.message || 'Auto paste failed';
+            showToast(msg, 2600);
+        }
+    });
+}
+
+function sendImageToAssistant(imageDataUrl, instruction) {
+    const centerX = window.innerWidth / 2 - 225;
+    const centerY = window.innerHeight / 2 - 300;
+    const prompt = `${instruction}\n\nBase64 PNG follows:\n${imageDataUrl}`;
+    CTX_CAPTURE.showModal('Image captured. Sending to assistant...', centerX, centerY);
+    CTX_CAPTURE.triggerAsk(prompt, '');
+}
+
+function dataUrlToBlob(dataUrl) {
+    if (!dataUrl || !dataUrl.includes(',')) throw new Error('Invalid dataUrl');
+    const parts = dataUrl.split(',');
+    const mimeMatch = parts[0].match(/data:(.*?);/);
+    const mime = mimeMatch && mimeMatch[1] ? mimeMatch[1] : "image/png";
+    const byteString = atob(parts[1]);
+    const len = byteString.length;
+    const u8 = new Uint8Array(len);
+    for (let i = 0; i < len; i++) u8[i] = byteString.charCodeAt(i);
+    return new Blob([u8], { type: mime });
+}
+
+function dataUrlToFile(dataUrl, filename = "capture.png") {
+    const blob = dataUrlToBlob(dataUrl);
+    return new File([blob], filename, { type: blob.type || "image/png" });
+}
+
+function copyImageToClipboard(dataUrl) {
+    if (!navigator.clipboard || !window.ClipboardItem) {
+        return Promise.reject(new Error('Clipboard API not available'));
+    }
+    const blob = dataUrlToBlob(dataUrl);
+    const item = new ClipboardItem({ [blob.type]: blob });
+    return navigator.clipboard.write([item]);
+}
+
+async function uploadImageTemp(dataUrl) {
+    if (!dataUrl) throw new Error('No image to upload');
+    if (CAPTURE_STATE.uploading) throw new Error('Upload in progress');
+    CAPTURE_STATE.uploading = true;
+    try {
+        const blob = dataUrlToBlob(dataUrl);
+        const file = new File([blob], "capture.png", { type: blob.type });
+
+        const uploaders = [
+            async () => {
+                const form = new FormData();
+                form.append("file", file);
+                const resp = await fetch("https://tmpfiles.org/api/v1/upload", { method: "POST", body: form });
+                if (!resp.ok) throw new Error(`tmpfiles failed (${resp.status})`);
+                const json = await resp.json();
+                const url = json?.data?.url || json?.url;
+                if (!url) throw new Error("tmpfiles missing url");
+                return url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
+            },
+            async () => {
+                const form = new FormData();
+                form.append("file", file);
+                const resp = await fetch("https://file.io", { method: "POST", body: form });
+                if (!resp.ok) throw new Error(`file.io failed (${resp.status})`);
+                const json = await resp.json();
+                if (!json?.success || !json?.link) throw new Error("file.io missing link");
+                return json.link;
+            },
+            async () => {
+                const form = new FormData();
+                form.append("file", file);
+                const resp = await fetch("https://0x0.st", { method: "POST", body: form });
+                if (!resp.ok) throw new Error(`0x0 failed (${resp.status})`);
+                const text = await resp.text();
+                const url = text.trim();
+                if (!url.startsWith("http")) throw new Error("0x0 invalid url");
+                return url;
+            }
+        ];
+
+        let lastErr;
+        for (const up of uploaders) {
+            try {
+                const url = await up();
+                return url;
+            } catch (err) {
+                lastErr = err;
+            }
+        }
+        throw lastErr || new Error("Upload failed");
+    } finally {
+        CAPTURE_STATE.uploading = false;
+    }
+}
+
+async function handleUploadLink(imageDataUrl) {
+    const target = imageDataUrl || CAPTURE_STATE.lastCaptureDataUrl;
+    if (!target) {
+        showToast('No image available to upload.');
+        return null;
+    }
+    if (CAPTURE_STATE.uploading) {
+        showToast('Upload in progress...', 2000);
+        return CAPTURE_STATE.lastUploadUrl || null;
+    }
+    showToast('Uploading image for shareable link...');
+    try {
+        const url = await uploadImageTemp(target);
+        CAPTURE_STATE.lastUploadUrl = url;
+        navigator.clipboard?.writeText?.(url).catch(() => {});
+        showToast('Link copied: ' + url, 3000);
+        return url;
+    } catch (err) {
+        console.error('Upload failed', err);
+        showToast('Upload failed. You can still paste the image manually.');
+        throw err;
+    }
+}
+
+function isVisible(el) {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+}
+
+function trySetFileOnInputs(file) {
+    const selectors = [
+        'input[type="file"]',
+        'input[type="file"][accept*="image"]',
+        'input[type="file"]:not([disabled])'
+    ];
+    for (const sel of selectors) {
+        const inputs = Array.from(document.querySelectorAll(sel)).filter(isVisible);
+        for (const input of inputs) {
+            try {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+                input.dispatchEvent(new Event("change", { bubbles: true }));
+                return true;
+            } catch (_) { /* ignore */ }
+        }
+    }
+    return false;
+}
+
+function tryDropFile(file) {
+    const targets = [
+        '[data-testid="file-upload"]',
+        '[aria-label*="Upload"]',
+        '[class*="upload"]',
+        'form',
+        'main'
+    ];
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const opts = { bubbles: true, cancelable: true, dataTransfer: dt };
+    for (const sel of targets) {
+        const els = Array.from(document.querySelectorAll(sel)).filter(isVisible);
+        for (const el of els) {
+            try {
+                ['dragenter', 'dragover', 'drop'].forEach(type => {
+                    el.dispatchEvent(new DragEvent(type, opts));
+                });
+                return true;
+            } catch (_) { /* ignore */ }
+        }
+    }
+    return false;
+}
+
+async function attachImageToPage(dataUrl) {
+    const file = dataUrlToFile(dataUrl);
+    if (trySetFileOnInputs(file)) return true;
+    if (tryDropFile(file)) return true;
+    return false;
+}
+
+function showToast(message, timeout = 2200) {
+    const existing = document.getElementById('askgpt-capture-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'askgpt-capture-toast';
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), timeout);
+}
+
+function notifyCaptureError(message) {
+    alert(`Capture failed: ${message}`);
+}
+
+function stopCaptureInteraction() {
+    if (CAPTURE_STATE.overlay) {
+        CAPTURE_STATE.overlay.removeEventListener('mousedown', onMouseDown);
+        CAPTURE_STATE.overlay.removeEventListener('mousemove', onMouseMove);
+        CAPTURE_STATE.overlay.removeEventListener('mouseup', onMouseUp);
+        CAPTURE_STATE.overlay.style.cursor = 'default';
+    }
+    if (CAPTURE_STATE.escHandler) document.removeEventListener('keydown', CAPTURE_STATE.escHandler);
+    CAPTURE_STATE.start = null;
+    CAPTURE_STATE.escHandler = null;
+}
+
+function cleanupCapture() {
+    hardResetCaptureState();
+}
+
+CTX_CAPTURE.startImageCapture = startImageCapture;
+CTX_CAPTURE.resetCaptureUi = hardResetCaptureState;
+CTX_CAPTURE.__captureLoaded = true;
+window.ASKGPT_CONTENT.__captureWarned = true;
+
+function hideOverlayForCapture() {
+    if (CAPTURE_STATE.overlay && !CAPTURE_STATE.overlayHidden) {
+        CAPTURE_STATE.overlayHidden = true;
+        CAPTURE_STATE.overlay.style.display = 'none';
+    }
+}
+
+function showOverlayAfterCapture() {
+    if (CAPTURE_STATE.overlay && CAPTURE_STATE.overlayHidden) {
+        CAPTURE_STATE.overlay.style.display = 'block';
+        CAPTURE_STATE.overlayHidden = false;
+    }
+}
+
+} // end load guard

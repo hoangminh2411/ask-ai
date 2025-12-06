@@ -1,0 +1,70 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { width: 420px; padding: 15px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #fff; color: #111; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .title { font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+        .logo { width: 24px; height: 24px; border-radius: 6px; }
+        .btn-settings { background: none; border: none; cursor: pointer; color: #666; font-size: 16px; padding: 6px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-settings:hover { color: #000; background: #f3f4f6; }
+
+        .user-quote {
+            background: #f3f4f6; border-left: 4px solid #3b82f6;
+            padding: 10px; margin-bottom: 15px; font-style: italic; color: #4b5563;
+            max-height: 100px; overflow-y: auto; font-size: 13px; border-radius: 0 4px 4px 0;
+        }
+
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
+        .btn-action {
+            padding: 6px 12px; background: #e5e7eb; border: none; border-radius: 20px;
+            cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; color: #374151;
+        }
+        .btn-action:hover { background: #d1d5db; color: #000; }
+        .btn-action.active { background: #10b981; color: white; }
+
+        .status-bar { font-size: 13px; margin-bottom: 10px; font-weight: 500; color: #2563eb; display: none;}
+        .status-bar.show { display: block; }
+        .error { color: #dc2626; }
+
+        #answer { margin-top: 15px; line-height: 1.6; font-size: 14px; word-wrap: break-word; }
+        #answer pre { background: #1f2937; color: #e5e7eb; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; font-size: 13px;}
+        #answer code { font-family: monospace; background: #f3f4f6; color: #c026d3; padding: 2px 4px; border-radius: 4px; }
+    </style>
+    <script src="marked.min.js"></script> 
+</head>
+<body>
+    <div class="header">
+        <div class="title">
+            <img src="icons/icon-32.png" class="logo" alt="AskGPT logo">
+            <span>AskGPT / Gemini</span>
+        </div>
+        <button id="open-settings" class="btn-settings" title="Configure provider" aria-label="Configure provider">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09A1.65 1.65 0 0 0 10 3.09V3a2 2 0 0 1 4 0v.09c0 .7.4 1.33 1.02 1.63.26.13.56.2.86.2.46 0 .91-.18 1.24-.52l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06c-.34.33-.52.78-.52 1.24v.09c0 .7.4 1.33 1.02 1.63.26.13.56.2.86.2H21a2 2 0 0 1 0 4h-.09c-.7 0-1.33.4-1.63 1.02z"></path>
+            </svg>
+        </button>
+    </div>
+
+    <div id="selected-text" class="user-quote">Loading text...</div>
+
+    <div class="actions">
+        <button class="btn-action" data-prompt="Explain this clearly for a beginner:">Explain</button>
+        <button class="btn-action" data-prompt="Translate this to Vietnamese (natural tone):">Translate to Vietnamese</button>
+        <button class="btn-action" data-prompt="Translate this to English (technical tone):">Translate to English</button>
+        <button class="btn-action" data-prompt="Summarize the key points as bullet points:">Summarize</button>
+        <button class="btn-action" data-prompt="Find issues/bugs and propose fixes:">Review for issues</button>
+        <button class="btn-action" data-prompt="Write unit tests (Jest/Go/Python) for this code:">Unit tests</button>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid #eee;">
+
+    <div id="status" class="status-bar"></div>
+    <div id="answer"></div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

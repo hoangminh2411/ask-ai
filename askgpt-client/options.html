@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -15,10 +15,10 @@
     </style>
 </head>
 <body>
-    <h2>Cài đặt AskGPT</h2>
+    <h2>AskGPT Settings</h2>
     
     <div class="form-group">
-        <label for="provider">Chọn AI Provider:</label>
+        <label for="provider">Choose AI Provider:</label>
         <select id="provider">
             <option value="chatgpt_web">ChatGPT Web (Free)</option>
             <option value="gemini_web">Gemini Web (Free)</option>
@@ -28,11 +28,11 @@
 
     <div class="form-group" id="api-group" style="display:none;">
         <label for="apiKey">Gemini API Key:</label>
-        <input type="password" id="apiKey" placeholder="Dán API Key vào đây...">
-        <div class="hint">Lấy key tại <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></div>
+        <input type="password" id="apiKey" placeholder="Enter your Gemini API Key...">
+        <div class="hint">Get a key at <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></div>
     </div>
 
-    <button id="save">Lưu Cài Đặt</button>
+    <button id="save">Save Settings</button>
     <div id="status"></div>
 
     <script src="options.js"></script>

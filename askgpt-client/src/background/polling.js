@@ -24,7 +24,46 @@ async function getFinalHTMLAndClose(windowId, tabId, initialCount, providerKey) 
     return result;
 }
 
+async function waitForChatGptStable(windowId, tabId, initialCount, port) {
+    port.postMessage({ status: 'progress', message: "AI Ž`ang vi §¨t..." });
+    await chrome.windows.update(windowId, { focused: true, state: 'normal' });
+    // Ask the content-side observer to wait for a stable answer, then return last html.
+    const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: async (startCount) => {
+            const ctx = window.ASKGPT_CONTENT;
+            if (!ctx?.waitForChatGptStableAnswer) throw new Error("observer not loaded");
+            const sel = '.markdown';
+            const bubbles = document.querySelectorAll(sel);
+            const hasNew = bubbles.length > startCount;
+            // Wait longer if no new bubble yet; shorter if one exists but still streaming.
+            const waitMs = hasNew ? 12000 : 20000;
+            await ctx.waitForChatGptStableAnswer(waitMs).catch(() => {});
+            const all = document.querySelectorAll(sel);
+            const html = all.length > startCount ? all[all.length - 1].innerHTML : "";
+            return { html, count: all.length };
+        },
+        args: [initialCount]
+    });
+    try { await chrome.windows.update(windowId, { state: 'minimized' }); } catch (_) {}
+    return result;
+}
+
 async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
+    if (providerKey === 'chatgpt_web') {
+        try {
+            const res = await waitForChatGptStable(windowId, tabId, initialCount, port);
+            if (res?.html && res.html.length > 0) {
+                port.postMessage({ status: 'success', answer: res.html });
+                setTimeout(() => self.ASKGPT_BG.detachDebugger(tabId), 1000);
+                return;
+            }
+        } catch (e) {
+            console.warn("waitForChatGptStable failed, falling back to legacy polling", e);
+        }
+        // If observer fails, continue with legacy polling below.
+    }
+
     let lastRawLength = 0;
     let stableCount = 0;
     let consecutiveDoneChecks = 0;
