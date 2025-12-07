@@ -9,12 +9,12 @@ window.ASKGPT_PROMPTS = [
     description: "Explain in bullets and a short takeaway."
   },
   {
-    id: "polish-en",
-    label: "Polish EN",
+    id: "rewrite-en",
+    label: "Rewrite",
     icon: "icons/prompt-polish.svg",
     surfaces: ['toolbar', 'panel'],
-    text: "Rewrite this in fluent, concise English. Keep technical terms accurate and tone professional.",
-    description: "Polish to fluent, concise English."
+    text: "Rewrite this with clearer, polished English. Keep meaning and key terms intact; concise, natural tone.",
+    description: "Rewrite with a polished, clear voice."
   },
   {
     id: "translate-vn",
@@ -65,3 +65,32 @@ window.ASKGPT_PROMPTS = [
     description: "Open Unsplash results for a keyword."
   }
 ];
+
+// Rewrite style options for toolbox menu
+window.ASKGPT_REWRITE_OPTIONS = [
+  {
+    id: "rewrite-polished",
+    label: "Polished",
+    icon: "icons/rewrite-polished.svg",
+    text: "Rewrite the text in polished, natural, idiomatic English. Preserve the original meaning and all key terms. Ensure clarity, fluency, and conciseness."
+  },
+  {
+    id: "rewrite-academic",
+    label: "Academic (IELTS)",
+    icon: "icons/rewrite-academic.svg",
+    text: "Rewrite the text in clear, formal IELTS-style academic English. Use logical structure, precise vocabulary, and a balanced, objective tone. Ensure coherence, clarity, and strong argumentation."
+  },
+  {
+    id: "rewrite-professional",
+    label: "Professional",
+    icon: "icons/rewrite-professional.svg",
+    text: "Rewrite the text in concise, confident professional business English. Maintain a courteous, actionable, and results-oriented tone."
+  },
+  {
+    id: "rewrite-shorten",
+    label: "Shorten",
+    icon: "icons/rewrite-shorten.svg",
+    text: "Rewrite the text into a significantly shorter version while preserving the core meaning, essential facts, and key terminology."
+  }
+];
+

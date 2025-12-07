@@ -76,9 +76,9 @@
         "src/content/layout.js",
         "src/content/modal.js",
         "src/content/chat-client.js",
-    "src/content/floating-button.js",
-    "src/content/sidepanel-launcher.js",
-    "src/content/events.js",
+        "src/content/floating-button.js",
+        "src/content/sidepanel-launcher.js",
+        "src/content/events.js",
         "src/content/image-capture.js",
         "content.js"
     ],

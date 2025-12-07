@@ -1,4 +1,4 @@
-// Floating toolbar for text selection
+﻿// Floating toolbar for text selection
 window.ASKGPT_CONTENT = window.ASKGPT_CONTENT || {};
 if (window.ASKGPT_CONTENT.__floatLoaded) {
     if (!window.ASKGPT_CONTENT.__floatWarned) {
@@ -21,7 +21,7 @@ function createFloatingButton(pageX, pageY, clientX, clientY, textContent) {
         promptList.push(
             { label: "Explain", text: "Explain this clearly with concise steps and a short summary.", icon: "" },
             { label: "EN", text: "Rewrite in fluent English.", icon: "" },
-            { label: "VN", text: "Dịch sang tiếng Việt ngắn gọn.", icon: "" },
+            { label: "VN", text: "Dá»‹ch sang tiáº¿ng Viá»‡t ngáº¯n gá»n.", icon: "" },
             { label: "TL;DR", text: "Summarize into 3-5 bullets.", icon: "" }
         );
     }
@@ -38,11 +38,16 @@ function createFloatingButton(pageX, pageY, clientX, clientY, textContent) {
         btn.type = 'button';
         btn.className = 'askgpt-fab-action';
         btn.setAttribute('data-prompt', preset.text || "");
+        if (preset.id) btn.setAttribute('data-id', preset.id);
         btn.title = preset.label;
         const iconSrc = preset.icon ? (chrome.runtime?.getURL?.(preset.icon) || preset.icon) : "";
+        const needsRewriteMenu = preset.id === "rewrite-en";
         btn.innerHTML = iconSrc
             ? `<img class="askgpt-fab-icon" src="${iconSrc}" alt="${preset.label}">`
             : `<span class="askgpt-fab-icon-text">${preset.label.slice(0,3)}</span>`;
+        if (needsRewriteMenu) {
+            btn.classList.add('askgpt-rewrite-entry');
+        }
         actions.appendChild(btn);
     });
     pop.appendChild(actions);
@@ -70,8 +75,13 @@ function createFloatingButton(pageX, pageY, clientX, clientY, textContent) {
         e.stopPropagation();
         const prompt = btn.getAttribute('data-prompt') || "";
         const label = btn.title || "";
+        const id = btn.getAttribute('data-id') || "";
         if (prompt === "__close__") {
             removeFloatingButton();
+            return;
+        }
+        if (id === "rewrite-en") {
+            showRewriteMenu(pop, textContent);
             return;
         }
         chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" });
@@ -95,11 +105,11 @@ function createFloatingButton(pageX, pageY, clientX, clientY, textContent) {
     CTX_FLOAT.state.floatingBtn = pop;
 
     if (!globalDismissBound) {
-        document.addEventListener('mousedown', (e) => {
-            if (CTX_FLOAT.state.floatingBtn && !e.target.closest('#askgpt-floating-btn')) {
-                removeFloatingButton();
-            }
-        });
+    document.addEventListener('mousedown', (e) => {
+        if (CTX_FLOAT.state.floatingBtn && !e.target.closest('#askgpt-floating-btn')) {
+            removeFloatingButton();
+        }
+    });
         globalDismissBound = true;
     }
 }
@@ -128,9 +138,65 @@ function dragEnd() {
     document.removeEventListener('mouseup', dragEnd);
 }
 
+function showRewriteMenu(container, selectionText) {
+    if (CTX_FLOAT.state.rewriteMenu) {
+        CTX_FLOAT.state.rewriteMenu.remove();
+        CTX_FLOAT.state.rewriteMenu = null;
+    }
+    const menu = document.createElement('div');
+    menu.className = 'askgpt-rewrite-menu';
+    Object.assign(menu.style, {
+        position: 'absolute',
+        top: '100%',
+        left: '0',
+        marginTop: '8px',
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: '10px',
+        boxShadow: '0 12px 30px rgba(0,0,0,0.15)',
+        padding: '8px',
+        zIndex: 2147483647,
+        minWidth: '220px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+    });
+    const options = (window.ASKGPT_REWRITE_OPTIONS || []).map(opt => ({
+        label: opt.label,
+        text: opt.text,
+        icon: opt.icon
+    }));
+    options.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'askgpt-rewrite-option';
+        const iconSrc = opt.icon ? (chrome.runtime?.getURL?.(opt.icon) || opt.icon) : "";
+        b.innerHTML = iconSrc
+            ? `<img class="askgpt-fab-icon" src="${iconSrc}" alt=""><span>${opt.label}</span>`
+            : `<span class="askgpt-fab-icon-text">?</span><span>${opt.label}</span>`;
+        b.addEventListener('click', () => {
+            chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" });
+            chrome.runtime.sendMessage({
+                action: "askgpt_panel_handle",
+                selection: selectionText || "",
+                finalQuery: `${opt.text}
+
+Context:
+"${selectionText || ""}"`,
+                promptLabel: opt.label
+            });
+            removeFloatingButton();
+        });
+        menu.appendChild(b);
+    });
+    container.appendChild(menu);
+    CTX_FLOAT.state.rewriteMenu = menu;
+}
+
+
 CTX_FLOAT.createFloatingButton = createFloatingButton;
 CTX_FLOAT.removeFloatingButton = removeFloatingButton;
 window.ASKGPT_CONTENT.__floatLoaded = true;
 window.ASKGPT_CONTENT.__floatWarned = true;
 
 } // end guard
+

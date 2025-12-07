@@ -69,6 +69,26 @@
     object-fit: cover;
 }
 
+/* Rewrite menu styles */
+.askgpt-rewrite-option {
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+    border-radius: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    text-align: left;
+    font-size: 13px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+.askgpt-rewrite-option:hover {
+    background: #eef2ff;
+    border-color: #cbd5ff;
+    transform: translateY(-1px);
+}
+
 /* ================================================================= */
 /* 2. MODAL CONTAINER (Main Window) */
 /* ================================================================= */
