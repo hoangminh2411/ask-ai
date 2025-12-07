@@ -25,7 +25,7 @@ async function getFinalHTMLAndClose(windowId, tabId, initialCount, providerKey) 
 }
 
 async function waitForChatGptStable(windowId, tabId, initialCount, port) {
-    port.postMessage({ status: 'progress', message: "AI Ž`ang vi §¨t..." });
+    port.postMessage({ status: 'progress', message: "AI is writing..." });
     await chrome.windows.update(windowId, { focused: true, state: 'normal' });
     // Ask the content-side observer to wait for a stable answer, then return last html.
     const [{ result }] = await chrome.scripting.executeScript({

@@ -3,6 +3,10 @@
 chrome.runtime.onConnect.addListener(async (port) => {
     if (port.name !== "ask-gpt-port") return;
 
+    let disconnected = false;
+    port.onDisconnect.addListener(() => { disconnected = true; });
+    const safePost = (payload) => { if (disconnected) return; try { port.postMessage(payload); } catch (_) {} };
+
     port.onMessage.addListener(async (request) => {
         const config = await chrome.storage.sync.get(['provider', 'geminiApiKey']);
         const provider = config.provider || 'chatgpt_web';
@@ -16,12 +20,12 @@ chrome.runtime.onConnect.addListener(async (port) => {
             const winData = await self.ASKGPT_BG.ensureWindow(provider, port);
             const initialCount = await self.ASKGPT_BG.getMessageCount(winData.tabId, provider);
 
-            port.postMessage({ status: 'progress', message: "Đang nhập..." });
+            safePost({ status: 'progress', message: "Signing in..." });
 
             const sendRes = await self.ASKGPT_BG.sendTextViaDebugger(winData.windowId, winData.tabId, request.query, provider);
             if (sendRes.error) throw new Error(sendRes.error);
 
-            port.postMessage({ status: 'progress', message: "Đợi phản hồi..." });
+            safePost({ status: 'progress', message: "Waiting for reply..." });
 
             let waitAttempts = 0;
             while (waitAttempts < 50) {
@@ -40,7 +44,7 @@ chrome.runtime.onConnect.addListener(async (port) => {
 
                 if (result === true) {
                     await chrome.windows.update(winData.windowId, { state: 'minimized' });
-                    port.postMessage({ status: 'progress', message: "AI đang viết..." });
+                    safePost({ status: 'progress', message: "AI is writing..." });
                     break;
                 }
                 await new Promise(r => setTimeout(r, 200));
@@ -51,7 +55,7 @@ chrome.runtime.onConnect.addListener(async (port) => {
 
         } catch (err) {
             console.error(err);
-            port.postMessage({ status: 'error', error: err.message });
+            safePost({ status: "error", error: err.message });
         }
     });
 });

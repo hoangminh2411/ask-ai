@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="sidepanel.css">
+  <script src="marked.min.js"></script>
+  <script src="prompts.js"></script>
+</head>
+<body class="sp-shell">
+  <header class="sp-header">
+    <div class="sp-title">
+      <img src="icons/icon-32.png" class="sp-logo" alt="AI Supporter logo">
+      <div>
+        <div class="sp-name">AI Supporter</div>
+        <div class="sp-sub">Assistant Panel</div>
+      </div>
+    </div>
+    <div class="sp-actions">
+      <button id="sp-refresh" title="Refresh selection" aria-label="Refresh selection">
+        <img src="icons/panel-refresh.svg" class="sp-icon-img" alt="Refresh">
+      </button>
+      <button id="sp-open-settings" title="Settings" aria-label="Settings">
+        <img src="icons/panel-settings.svg" class="sp-icon-img" alt="Settings">
+      </button>
+    </div>
+  </header>
+
+  <div class="sp-main">
+    <section id="sp-answer" class="sp-answer sp-chat"></section>
+
+    <section class="sp-input">
+      <div class="sp-chatbox">
+        <textarea id="sp-prompt" class="sp-field" rows="4" placeholder="Select text or type your message..."></textarea>
+        <div class="sp-chat-actions">
+          <div class="sp-chat-actions-left">
+            <span id="sp-active-prompt" class="sp-active-prompt">Prompt: Free</span>
+            <div class="sp-quick-wrapper">
+              <button id="sp-toggle-prompts" class="sp-toggle-prompts" title="Choose prompt" aria-label="Toggle prompts">
+                <img src="icons/prompt-panel.svg" class="sp-icon-img" alt="Prompts">
+              </button>
+              <div class="sp-quick sp-quick-icons" id="sp-quick-menu" title="Pick a prompt or type your own">
+                <div class="sp-quick-search">
+                  <input id="sp-prompt-filter" type="search" placeholder="Search prompt... (press /)" autocomplete="off">
+                </div>
+              </div>
+            </div>
+          </div>
+          <button id="sp-send" class="sp-send" title="Send" aria-label="Send">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 4l17 8-17 8 4-8-4-8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="sp-status" class="sp-status"></div>
+    </section>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

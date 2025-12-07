@@ -8,5 +8,6 @@ importScripts(
   'src/background/polling.js',
   'src/background/api.gemini.js',
   'src/background/controller.js',
-  'src/background/menus-shortcuts.js'
+  'src/background/menus-shortcuts.js',
+  'src/background/sidepanel.js'
 );

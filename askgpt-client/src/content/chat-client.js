@@ -35,81 +35,19 @@ function ensureModalDom(text) {
 }
 
 function triggerAsk(promptPrefix, text) {
+    // Redirect asks to the side panel instead of rendering an in-page modal.
     CTX_CHAT.state.modalClosedManually = false;
-    const dom = ensureModalDom(text);
-    if (!dom) return;
-    const { resultDiv, statusContainer, statusText } = dom;
-
-    const userMsg = document.createElement('div');
-    userMsg.className = 'askgpt-msg-user';
-    userMsg.innerText = promptPrefix.endsWith(':') ? promptPrefix.replace(':', '') : promptPrefix;
-    resultDiv.appendChild(userMsg);
-
-    CTX_CHAT.state.currentBotMsgDiv = document.createElement('div');
-    CTX_CHAT.state.currentBotMsgDiv.className = 'askgpt-msg-bot';
-    CTX_CHAT.state.currentBotMsgDiv.innerHTML = '<span class="askgpt-typing">AI is thinking...</span>';
-    resultDiv.appendChild(CTX_CHAT.state.currentBotMsgDiv);
-
-    resultDiv.scrollTop = resultDiv.scrollHeight;
-
-    statusContainer.style.display = 'flex';
-    statusText.innerText = "Processing...";
-
-    const port = chrome.runtime.connect({ name: "ask-gpt-port" });
-
     let finalQuery = "";
     if (text && text.length > 0) {
         finalQuery = `${promptPrefix}\n\nContext:\n"${text}"`;
     } else {
         finalQuery = promptPrefix;
     }
-
-    port.postMessage({ query: finalQuery });
-
-    port.onMessage.addListener((msg) => {
-        if (CTX_CHAT.state.modalClosedManually) {
-            console.debug("ASKGPT modal closed; ignoring message", msg.status);
-            return;
-        }
-        // Re-hydrate modal DOM if it was removed while the request was in flight.
-        let liveResult = document.getElementById('askgpt-result');
-        let liveStatusContainer = document.getElementById('askgpt-status-container');
-        let liveStatusText = document.getElementById('askgpt-status-text');
-        if (!liveResult || !liveStatusContainer || !liveStatusText || !CTX_CHAT.state.currentBotMsgDiv) {
-            const domNow = ensureModalDom(text);
-            if (!domNow) {
-                console.warn("ASKGPT UI missing; ignoring chat message", msg);
-                return;
-            }
-            liveResult = domNow.resultDiv;
-            liveStatusContainer = domNow.statusContainer;
-            liveStatusText = domNow.statusText;
-            // Create a fresh bot message container if the old one is gone.
-            if (!CTX_CHAT.state.currentBotMsgDiv) {
-                CTX_CHAT.state.currentBotMsgDiv = document.createElement('div');
-                CTX_CHAT.state.currentBotMsgDiv.className = 'askgpt-msg-bot';
-                liveResult.appendChild(CTX_CHAT.state.currentBotMsgDiv);
-            }
-        }
-
-        if (msg.status === 'progress') {
-            liveStatusText.innerText = "Progress: " + msg.message;
-        }
-        else if (msg.status === 'success') {
-            liveStatusContainer.style.display = 'none';
-            if (typeof marked !== 'undefined') {
-                CTX_CHAT.state.currentBotMsgDiv.innerHTML = marked.parse(msg.answer);
-            } else {
-                CTX_CHAT.state.currentBotMsgDiv.innerText = msg.answer;
-            }
-            liveResult.scrollTop = liveResult.scrollHeight;
-        }
-        else if (msg.status === 'error') {
-            liveStatusContainer.style.display = 'none';
-            if (CTX_CHAT.state.currentBotMsgDiv) {
-                CTX_CHAT.state.currentBotMsgDiv.innerHTML = `<span style="color:red">Error: ${msg.error}</span>`;
-            }
-        }
+    chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" });
+    chrome.runtime.sendMessage({
+        action: "askgpt_panel_handle",
+        selection: text || "",
+        finalQuery
     });
 }
 

@@ -17,12 +17,19 @@
     "scripting",
     "storage",
     "debugger",
-    "contextMenus"
+    "contextMenus",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://gemini.google.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://unsplash.com/*",
+    "https://source.unsplash.com/*",
+    "https://images.unsplash.com/*",
+    "https://*.wikipedia.org/*",
+    "https://www.pinterest.com/*",
+    "https://i.pinimg.com/*"
   ],
   "commands": {
     "summarize-page": {
@@ -55,18 +62,23 @@
     "page": "options.html",
     "open_in_tab": false
   },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": [
         "marked.min.js",
+        "prompts.js",
         "src/content/state.js",
         "src/content/extract.js",
         "src/content/layout.js",
         "src/content/modal.js",
         "src/content/chat-client.js",
-        "src/content/floating-button.js",
-        "src/content/events.js",
+    "src/content/floating-button.js",
+    "src/content/sidepanel-launcher.js",
+    "src/content/events.js",
         "src/content/image-capture.js",
         "content.js"
     ],
@@ -77,7 +89,11 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["marked.min.js"],
+      "resources": [
+        "marked.min.js",
+        "icons/*.svg",
+        "icons/*.png"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

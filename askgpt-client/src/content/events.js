@@ -16,14 +16,13 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
             sendResponse?.({ ok: false, error: "too_short" });
             return;
         }
-
-        CTX_EVENTS.showModal("Reading page content...", 100, 100);
-
-        if (!CTX_EVENTS.state.isSidebarMode) {
-            CTX_EVENTS.toggleSidebar();
-        }
-
-        CTX_EVENTS.triggerAsk("Summarize the key points of this page (ignore ads/menus):", pageText);
+        // Route to side panel
+        chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" });
+        chrome.runtime.sendMessage({
+            action: "askgpt_panel_handle",
+            selection: pageText,
+            finalQuery: `Summarize the key points of this page (ignore ads/menus):\n\nContext:\n"${pageText}"`
+        });
         sendResponse?.({ ok: true });
         return true;
     }
@@ -57,11 +56,20 @@ document.addEventListener('mouseup', (e) => {
         const clientY = rect.top - 35;
 
         CTX_EVENTS.createFloatingButton(pageX, pageY, clientX, clientY, text);
+    } else {
+        CTX_EVENTS.removeFloatingButton();
     }
 });
 
 document.addEventListener('mousedown', (e) => {
     if (!e.target.closest('#askgpt-floating-btn') && !e.target.closest('#askgpt-modal')) {
+        CTX_EVENTS.removeFloatingButton();
+    }
+});
+
+document.addEventListener('selectionchange', () => {
+    const text = window.getSelection().toString().trim();
+    if (text.length < 3) {
         CTX_EVENTS.removeFloatingButton();
     }
 });

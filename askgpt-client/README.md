@@ -1,61 +1,40 @@
-﻿# Browser Extension
+# AskGPT Browser Extension
 
-Short README for this browser extension project.
-Recent change: code was split into smaller modules under `src/` for maintainability; manifest still loads the same entry files (`background.js`, `content.js`) which import/chain-load these modules.
+Lightweight assistant extension with floating selection toolbox, sidepanel chat, quick prompts (translate, summarize, polish, find images, etc.).
 
-## Overview
+## Key Features
+- Floating toolbox on text selection with quick prompts and sidepanel launcher.
+- Sidepanel chat with prompt picker, slash search, Enter-to-send, Shift+Enter newline.
+- Shared prompt registry (`prompts.js`) for toolbar and panel.
+- Image search prompt (Pinterest/Unsplash/loremflickr/Picsum via background proxy) with 3-column thumbnails.
+- Modular background (`src/background/*`) for window control, polling, API/Gemini routing, Pinterest scraping; content modules (`src/content/*`) for modal, layout, floating button, events.
 
-This repository contains a small browser extension that injects a content script into web pages, provides a popup UI and an options page, and includes a bundled Markdown renderer (`marked.min.js`).
+## Install (dev)
+Chrome/Chromium:
+1) Open `chrome://extensions/`, enable Developer mode.
+2) Load unpacked ? select `askgpt-client` (folder with `manifest.json`).
 
-## Features
-
-- Injects content script (`content.js`) with styling (`content.css`)
-- Background logic in `background.js` (imports modular files in `src/background/`)
-- Popup UI (`popup.html`, `popup.js`)
-- Options/settings page (`options.html`, `options.js`)
-- Markdown rendering via `marked.min.js`
-
-## Install (development / local)
-
-Chrome / Chromium:
-1. Open `chrome://extensions/`.
-2. Enable "Developer mode".
-3. Click "Load unpacked" and select this project folder (the folder that contains `manifest.json`).
-
-Firefox (temporary install):
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Click "Load Temporary Add-on..." and choose the `manifest.json` file from this project folder.
+Firefox (temporary):
+1) `about:debugging#/runtime/this-firefox` ? Load Temporary Add-on? ? pick `manifest.json`.
 
 ## Usage
+- Select text ? floating toolbox ? choose prompt or open sidepanel.
+- In sidepanel: press `/` to open prompt menu, arrow keys to navigate, Enter to select; Enter sends, Shift+Enter newline.
+- ?Find Images? prompt returns a thumbnail grid; click to open the image in a new tab.
 
-- Click the extension toolbar icon to open the popup (`popup.html`).
-- Open the options page to configure settings (`options.html`).
-- Visit pages matching the `manifest.json` `content_scripts` `matches` patterns to see the content script run.
+## Project Structure
+- `manifest.json` ? permissions & host access (ChatGPT, Gemini, Pinterest, Unsplash, etc.).
+- `background.js` ? `src/background/` modules (`controller`, `polling`, `sender`, `sidepanel`, `api.gemini`, etc.).
+- `content.js` ? `src/content/` modules (`floating-button`, `modal`, `events`, `chat-client`, etc.).
+- UI assets: `content.css`, `sidepanel.html/css/js`, `popup.html/js`, `icons/*.svg`.
+- Prompt registry: `prompts.js`; Markdown renderer: `marked.min.js`.
 
-## Project structure
-
-- `manifest.json` — Extension manifest and permission settings
-- `background.js` — Entry for service worker; loads modules in `src/background/`
-- `src/background/` — Split modules: `constants`, `debugger`, `window-manager`, `message-state`, `sender`, `polling`, `api.gemini`, `controller`, `menus-shortcuts`
-- `content.js` — Entry for injected content script; loaded after modules below
-- `src/content/` — Split modules: `state`, `extract`, `layout`, `modal`, `chat-client`, `floating-button`, `events`
-- `content.css` — Styling for injected UI
-- `popup.html`, `popup.js` — Popup UI and logic
-- `options.html`, `options.js` — Options/settings UI and logic
-- `marked.min.js` — Bundled Markdown renderer
-
-## Development notes
-
-- Edit modules in `src/` for logic; entries `background.js` and `content.js` remain the manifest targets.
-- If adding libraries or changing permissions/host matches, update `manifest.json` accordingly.
-- Use browser extension devtools and console logs for debugging.
+## Dev Notes
+- Edit logic in `src/`; entry files remain manifest targets.
+- Update `prompts.js` and `icons/` when adding prompts/icons.
+- If adding new host sources (e.g., images), update `manifest.json` and proxy handling in `src/background/sidepanel.js`.
 
 ## Troubleshooting
-
-- Extension won't load: confirm you selected the correct folder and `manifest.json` is present.
-- Content scripts not running: check `manifest.json` `matches` and permissions.
-- See the browser console and background page console for errors.
-
-## License
-
-Default: MIT — change as needed.
+- Toolbox/sidepanel not opening: reload extension, check console and permissions.
+- Stuck ?AI is writing??: ensure background service worker is active; reload extension/page.
+- Empty images: sources may throttle; verify host permissions and reload.

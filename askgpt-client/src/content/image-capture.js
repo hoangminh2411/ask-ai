@@ -234,7 +234,8 @@ function showCaptureToolbox(imageDataUrl, rect) {
     const toolbox = document.createElement('div');
     toolbox.className = 'askgpt-capture-toolbox';
     const top = Math.max(12, rect.top + rect.height + 8);
-    const left = Math.max(12, rect.left);
+    const maxLeft = window.innerWidth - 240;
+    const left = Math.max(12, Math.min(rect.left, maxLeft));
     toolbox.style.top = `${top}px`;
     toolbox.style.left = `${left}px`;
     toolbox.innerHTML = `
@@ -348,12 +349,14 @@ async function sendImageIntent(mode) {
     setTimeout(() => {
         // Guard against toolbox re-showing after modal; ensure nothing sits above modal.
         forceRemoveCaptureDom();
-        const cx = window.innerWidth / 2 - 225;
-        const cy = window.innerHeight / 2 - 300;
         const linkNote = CAPTURE_STATE.lastUploadUrl ? `\nImage URL: ${CAPTURE_STATE.lastUploadUrl}\n(If paste fails, fetch this URL to view the image.)` : '';
-        CTX_CAPTURE.showModal(`Paste the captured image into chat, then request: ${actionText}.${linkNote ? '\n\nA shareable link is also ready.' : ''}`, cx, cy);
-        CTX_CAPTURE.triggerAsk(`User will paste an image into chat. Please be ready to ${actionText.toLowerCase()} once the image is pasted.${linkNote ? '\n' + linkNote : ''}`, '');
-        console.debug("ASKGPT capture -> modal opened");
+        chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" });
+        chrome.runtime.sendMessage({
+            action: "askgpt_panel_handle",
+            selection: "",
+            finalQuery: `User will paste an image into chat. Please be ready to ${actionText.toLowerCase()} once the image is pasted.${linkNote ? '\n' + linkNote : ''}`
+        });
+        console.debug("ASKGPT capture -> sidepanel prompt");
     }, 50);
 }
 
