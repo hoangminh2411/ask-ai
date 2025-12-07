@@ -29,7 +29,9 @@
     "https://images.unsplash.com/*",
     "https://*.wikipedia.org/*",
     "https://www.pinterest.com/*",
-    "https://i.pinimg.com/*"
+    "https://i.pinimg.com/*",
+    "https://lens.google.com/*",
+    "https://www.google.com/*"
   ],
   "commands": {
     "summarize-page": {

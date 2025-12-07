@@ -9,5 +9,6 @@ importScripts(
   'src/background/api.gemini.js',
   'src/background/controller.js',
   'src/background/menus-shortcuts.js',
+  'src/background/lens.js',
   'src/background/sidepanel.js'
 );

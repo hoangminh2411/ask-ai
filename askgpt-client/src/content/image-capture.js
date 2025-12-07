@@ -14,6 +14,7 @@ const CAPTURE_STATE = {
     start: null,
     pendingRect: null,
     lastRect: null,
+    captureRectSnapshot: null,
     escHandler: null,
     toolboxEscHandler: null,
     lastCaptureDataUrl: null,
@@ -21,7 +22,8 @@ const CAPTURE_STATE = {
     uploading: false,
     overlayHidden: false,
     handledCapture: false,
-    hasDragged: false
+    hasDragged: false,
+    sessionId: 0
 };
 
 function forceRemoveCaptureDom() {
@@ -39,23 +41,21 @@ function hardResetCaptureState() {
     CAPTURE_STATE.start = null;
     CAPTURE_STATE.pendingRect = null;
     CAPTURE_STATE.lastRect = null;
+    CAPTURE_STATE.captureRectSnapshot = null;
     CAPTURE_STATE.overlayHidden = false;
     CAPTURE_STATE.handledCapture = false;
     CAPTURE_STATE.hasDragged = false;
+    CAPTURE_STATE.sessionId = CAPTURE_STATE.sessionId || 0;
 }
 
 function startImageCapture() {
-    // If a stale overlay/toolbox was left behind, clean it up so capture can proceed.
-    if (CAPTURE_STATE.overlay) {
-        if (!CAPTURE_STATE.handledCapture && CAPTURE_STATE.pendingRect) {
-            showToast('Capture already in progress. Press Esc to cancel.', 2000);
-            return;
-        }
-        hardResetCaptureState();
-    }
-    // Avoid stacking multiple capture poppers/toolboxes from prior runs.
+    // Always start from a clean slate to avoid stale overlays/toolboxes.
+    hardResetCaptureState();
     removeToolbox();
     forceRemoveCaptureDom();
+
+    // Bump session so stale capture results are ignored; keep lastCaptureDataUrl until a new result replaces it.
+    CAPTURE_STATE.sessionId = (CAPTURE_STATE.sessionId || 0) + 1;
 
     const overlay = document.createElement('div');
     overlay.id = 'askgpt-capture-overlay';
@@ -87,6 +87,9 @@ function onMouseDown(e) {
     e.preventDefault();
     CAPTURE_STATE.handledCapture = false;
     CAPTURE_STATE.hasDragged = false;
+    CAPTURE_STATE.pendingRect = null;
+    CAPTURE_STATE.lastRect = null;
+    CAPTURE_STATE.captureRectSnapshot = null;
     CAPTURE_STATE.start = { x: e.clientX, y: e.clientY };
     CAPTURE_STATE.selectionBox.style.display = 'block';
     CAPTURE_STATE.selectionBox.style.left = `${CAPTURE_STATE.start.x}px`;
@@ -130,13 +133,15 @@ function onMouseUp(e) {
     // Use DOMRect-like keys so downstream cropping logic works when the overlay is hidden.
     CAPTURE_STATE.pendingRect = { left: x, top: y, width: w, height: h };
     CAPTURE_STATE.lastRect = CAPTURE_STATE.pendingRect;
+    CAPTURE_STATE.captureRectSnapshot = { left: x, top: y, width: w, height: h };
     hideOverlayForCapture();
     requestVisibleCapture();
 }
 
 function requestVisibleCapture() {
     try {
-        chrome.runtime.sendMessage({ action: 'capture_visible' }, () => {
+        const rect = CAPTURE_STATE.pendingRect || CAPTURE_STATE.lastRect || CAPTURE_STATE.captureRectSnapshot || null;
+        chrome.runtime.sendMessage({ action: 'capture_visible', rect, sessionId: CAPTURE_STATE.sessionId }, () => {
             const lastError = chrome.runtime.lastError;
             if (lastError) {
                 console.error('Capture request failed:', lastError.message);
@@ -157,9 +162,14 @@ function requestVisibleCapture() {
 
 chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === 'capture_result' && msg.dataUrl && CAPTURE_STATE.overlay) {
+        if (msg.sessionId && msg.sessionId !== CAPTURE_STATE.sessionId) return;
         if (CAPTURE_STATE.handledCapture) return;
         const liveRect = CAPTURE_STATE.selectionBox ? CAPTURE_STATE.selectionBox.getBoundingClientRect() : null;
-        const rect = CAPTURE_STATE.pendingRect || CAPTURE_STATE.lastRect || (liveRect ? { left: liveRect.left, top: liveRect.top, width: liveRect.width, height: liveRect.height } : null);
+        const rect = msg.rect
+            || CAPTURE_STATE.pendingRect
+            || CAPTURE_STATE.lastRect
+            || CAPTURE_STATE.captureRectSnapshot
+            || (liveRect ? { left: liveRect.left, top: liveRect.top, width: liveRect.width, height: liveRect.height } : null);
         if (!rect || !rect.width || !rect.height) {
             CAPTURE_STATE.handledCapture = true;
             console.warn('Capture result received without a valid rect');
@@ -188,6 +198,7 @@ chrome.runtime.onMessage.addListener((msg) => {
             cleanupCapture();
         });
     } else if (msg.action === 'capture_result_error' && CAPTURE_STATE.overlay) {
+        if (msg.sessionId && msg.sessionId !== CAPTURE_STATE.sessionId) return;
         notifyCaptureError(msg.error || 'Capture failed.');
         cleanupCapture();
         showOverlayAfterCapture();
@@ -323,41 +334,123 @@ function removeToolbox() {
     }
 }
 
+async function requestLensAnalysis(mode) {
+    if (!CAPTURE_STATE.lastCaptureDataUrl) throw new Error('No captured image available');
+    return new Promise((resolve) => {
+        let finished = false;
+        const timer = setTimeout(() => {
+            if (finished) return;
+            finished = true;
+            resolve({ error: 'Lens timed out' });
+        }, 25000);
+        chrome.runtime.sendMessage({
+            action: 'askgpt_lens_search',
+            dataUrl: CAPTURE_STATE.lastCaptureDataUrl,
+            mode,
+            maxItems: mode === 'similar' ? 12 : 10
+        }, (resp) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            const err = resp?.error || chrome.runtime.lastError?.message;
+            if (err) {
+                resolve({ error: err });
+                return;
+            }
+            resolve(resp || {});
+        });
+    });
+}
+
 async function sendImageIntent(mode) {
-    const actionText = mode === 'similar' ? 'Find similar images' : 'Explain this image';
-    const chk = document.getElementById('askgpt-tool-autopaste-chk');
-    let attached = false;
-    if (CAPTURE_STATE.lastCaptureDataUrl) {
-        showToast('Attaching image to chat...');
-        attached = await attachImageToPage(CAPTURE_STATE.lastCaptureDataUrl).catch(() => false);
+    const isSimilar = mode === 'similar';
+    if (!CAPTURE_STATE.lastCaptureDataUrl) {
+        showToast('No captured image found. Please capture again before using this action.', 2600);
+        return;
     }
-    if (!attached) {
-        if (chk && chk.checked) {
-            triggerAutoPaste();
-        } else {
-            showToast('Image copied. Press Ctrl+V in ChatGPT/Gemini to paste, then hit Send.');
-        }
-    } else {
-        showToast('Image attached. Add your prompt and send.');
+    showToast(isSimilar ? 'Finding similar images via Lens...' : 'Explaining image via Lens...');
+    chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" });
+    setTimeout(() => {
+        chrome.runtime.sendMessage({
+            action: "askgpt_panel_lens_progress",
+            message: isSimilar ? "Searching similar images via Google Lens..." : "Analyzing image via Google Lens..."
+        });
+    }, 50);
+    const lens = await requestLensAnalysis(mode);
+    if (lens.error) {
+        showToast('Lens failed: ' + lens.error, 2600);
+        chrome.runtime.sendMessage({
+            action: "askgpt_panel_lens_results",
+            payload: { mode, images: [], descriptions: [], error: lens.error }
+        });
+        chrome.runtime.sendMessage({ action: "askgpt_panel_lens_done" });
+        return;
     }
 
-    // Make sure no capture UI (overlay/toolbox) sits above the modal that opens next.
+    const payload = {
+        mode,
+        images: lens.images || [],
+        descriptions: lens.descriptions || []
+    };
+
     removeToolbox();
     cleanupCapture();
     forceRemoveCaptureDom();
-    // Slight delay so DOM removal finishes before modal is created.
-    setTimeout(() => {
-        // Guard against toolbox re-showing after modal; ensure nothing sits above modal.
-        forceRemoveCaptureDom();
-        const linkNote = CAPTURE_STATE.lastUploadUrl ? `\nImage URL: ${CAPTURE_STATE.lastUploadUrl}\n(If paste fails, fetch this URL to view the image.)` : '';
-        chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" });
-        chrome.runtime.sendMessage({
-            action: "askgpt_panel_handle",
-            selection: "",
-            finalQuery: `User will paste an image into chat. Please be ready to ${actionText.toLowerCase()} once the image is pasted.${linkNote ? '\n' + linkNote : ''}`
+
+    const publishToPanel = (tasks) => {
+        chrome.runtime.sendMessage({ action: "askgpt_open_sidepanel" }, () => {
+            // Give the panel a brief moment to attach listeners/state
+            setTimeout(tasks, 120);
         });
-        console.debug("ASKGPT capture -> sidepanel prompt");
-    }, 50);
+    };
+
+    if (isSimilar) {
+        publishToPanel(() => {
+            chrome.runtime.sendMessage({
+                action: "askgpt_panel_lens_results",
+                payload: { ...payload, mode: 'similar' }
+            });
+            const urls = (payload.images || []).slice(0, 12).map((img) => img.source || img.src || img.thumb).filter(Boolean);
+            const list = urls.map((u, idx) => `${idx + 1}. ${u}`).join('\n');
+            const finalQuery = urls.length
+                ? `You are an image search assistant. We captured an image and fetched similar images via Google Lens. Here are the top results:\n${list}\n\nSummarize what these images depict in 2-3 sentences and surface the top 3 links as markdown bullets.`
+                : "Google Lens returned no similar images. Let the user know no similar results were found.";
+            chrome.runtime.sendMessage({
+                action: "askgpt_panel_handle",
+                selection: "",
+                promptLabel: "Find similar",
+                finalQuery
+            });
+            chrome.runtime.sendMessage({ action: "askgpt_panel_lens_done" });
+            console.debug("ASKGPT capture -> Lens similar results");
+        });
+        return;
+    }
+
+    // Explain flow using Lens descriptions
+    publishToPanel(() => {
+        if (payload.descriptions && payload.descriptions.length) {
+            chrome.runtime.sendMessage({
+                action: "askgpt_panel_lens_results",
+                payload: { mode: 'explain', descriptions: payload.descriptions }
+            });
+            const bullets = payload.descriptions.slice(0, 10).map((d) => `- ${d}`).join('\n');
+            chrome.runtime.sendMessage({
+                action: "askgpt_panel_handle",
+                selection: "",
+                promptLabel: "Explain image",
+                finalQuery: `Explain the captured image using these Google Lens observations:\n${bullets}\nProvide a concise, user-friendly explanation and key details.`
+            });
+        } else {
+            chrome.runtime.sendMessage({
+                action: "askgpt_panel_handle",
+                selection: "",
+                promptLabel: "Explain image",
+                finalQuery: "Google Lens did not return descriptions for this image. Let the user know no description was found."
+            });
+        }
+        chrome.runtime.sendMessage({ action: "askgpt_panel_lens_done" });
+    });
 }
 
 function triggerAutoPaste() {

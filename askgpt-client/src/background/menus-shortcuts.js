@@ -165,15 +165,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         self.ASKGPT_BG.MANAGERS.chatgpt_web.windowId = null;
         self.ASKGPT_BG.MANAGERS.gemini_web.windowId = null;
     } else if (msg.action === "capture_visible") {
+        const rect = msg.rect || null;
+        const sessionId = msg.sessionId || 0;
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             if (!tabs[0]) return;
             chrome.tabs.captureVisibleTab(tabs[0].windowId, { format: "png" }, (dataUrl) => {
                 const err = chrome.runtime.lastError;
                 if (err || !dataUrl) {
-                    sendToTabWithInject(tabs[0], { action: "capture_result_error", error: err ? err.message : "No data returned" }, "capture_result_error");
+                    sendToTabWithInject(tabs[0], { action: "capture_result_error", error: err ? err.message : "No data returned", sessionId }, "capture_result_error");
                     return;
                 }
-                sendToTabWithInject(tabs[0], { action: "capture_result", dataUrl }, "capture_result");
+                sendToTabWithInject(tabs[0], { action: "capture_result", dataUrl, rect, sessionId }, "capture_result");
             });
         });
         sendResponse({ ok: true });

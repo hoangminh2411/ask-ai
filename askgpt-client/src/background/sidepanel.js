@@ -3,6 +3,7 @@ const lastPanelState = new Map(); // tabId -> { selection, prompt, finalQuery }
 
 chrome.runtime.onInstalled.addListener(() => {
     try {
+        // Cấu hình sidepanel mặc định
         chrome.sidePanel.setOptions({ path: "sidepanel.html", enabled: true });
     } catch (_) { /* sidePanel may not be available */ }
 });
@@ -17,35 +18,60 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    // 1. Mở Sidepanel
     if (msg?.action === "askgpt_open_sidepanel") {
         const tabId = msg.tabId || sender?.tab?.id;
         if (!tabId) return;
         chrome.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true }, () => {
             const optErr = chrome.runtime.lastError;
             if (optErr) {
-                console.warn("sidePanel.setOptions failed", optErr);
                 chrome.tabs.sendMessage(tabId, { action: "askgpt_sidepanel_failed", error: optErr.message || "" }).catch(() => {});
                 return;
             }
             chrome.sidePanel.open({ tabId }, () => {
                 const openErr = chrome.runtime.lastError;
                 if (openErr) {
-                    console.warn("sidePanel.open failed", openErr);
                     chrome.tabs.sendMessage(tabId, { action: "askgpt_sidepanel_failed", error: openErr.message || "" }).catch(() => {});
                 }
             });
         });
     }
+    // 2. Lưu trạng thái (Text Selection, Prompt)
     else if (msg?.action === "askgpt_panel_handle" || msg?.action === "askgpt_panel_set_context") {
         const tabId = msg.tabId || sender?.tab?.id || 0;
-        lastPanelState.set(tabId, { selection: msg.selection || "", prompt: msg.prompt || "", finalQuery: msg.finalQuery || "", promptLabel: msg.promptLabel || "" });
+        const prev = lastPanelState.get(tabId) || {};
+        lastPanelState.set(tabId, {
+            ...prev,
+            selection: msg.selection || "",
+            prompt: msg.prompt || "",
+            finalQuery: msg.finalQuery || "",
+            promptLabel: msg.promptLabel || ""
+        });
     }
+    // 3. UI yêu cầu lấy lại trạng thái cũ
     else if (msg?.action === "askgpt_panel_request_state") {
         const tabId = msg.tabId || sender?.tab?.id || 0;
         const state = lastPanelState.get(tabId) || null;
         sendResponse?.({ state });
         return true;
     }
+    // 4. Xử lý kết quả từ LENS (Quan trọng)
+    else if (msg?.action === "askgpt_panel_lens_results" && msg.payload) {
+        const tabId = msg.tabId || sender?.tab?.id || 0;
+        const prev = lastPanelState.get(tabId) || {};
+        const payload = msg.payload || {};
+        
+        // Lưu kết quả vào bộ nhớ đệm
+        lastPanelState.set(tabId, { ...prev, lensResults: payload });
+        
+        // Nếu muốn gửi ngược lại Content Script (tuỳ chọn, nhưng giữ lại để an toàn)
+        if (tabId) {
+            try {
+                chrome.tabs.sendMessage(tabId, { action: "askgpt_panel_lens_results", payload });
+            } catch (_) { /* ignore */ }
+        }
+    }
+    // 5. Lấy text đang bôi đen
     else if (msg?.action === "askgpt_get_selection") {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const tab = tabs[0];
@@ -63,6 +89,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         });
         return true;
     }
+    // 6. Proxy tải ảnh (để tránh CORS)
     else if (msg?.action === "askgpt_proxy_image" && msg.url) {
         fetch(msg.url, { redirect: "follow" })
             .then(res => {
@@ -79,49 +106,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             .catch(err => sendResponse({ error: String(err) }));
         return true;
     }
+    // 7. Pinterest Search
     else if (msg?.action === "askgpt_pinterest_fetch" && msg.query) {
         const url = `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(msg.query)}`;
         fetch(url, { redirect: "follow" })
             .then(res => res.text())
             .then(html => {
                 const urls = [];
+                // Simple parsing logic logic
                 const normalized = html.replace(/\\u002F/g, "/").replace(/\\\\\//g, "/");
-                const sizeWhitelist = ['/236x/', '/474x/', '/564x/', '/736x/', '/originals/'];
-                const isValidPin = (u) => {
-                    if (!u.includes('i.pinimg.com')) return false;
-                    if (u.includes('/avatars/') || u.includes('/30x30/')) return false;
-                    return sizeWhitelist.some(sz => u.includes(sz));
-                };
-                // Extract from pinrep-image elements (src only to avoid srcset duplicates), dedupe by ID
-                const seenIds = new Set();
-                const getId = (u) => {
-                    try {
-                        const path = new URL(u).pathname;
-                        const last = path.split('/').pop() || "";
-                        return last.split('.')[0];
-                    } catch (_) { return ""; }
-                };
-                const imgTags = [...normalized.matchAll(/<img[^>]*pinrep-image[^>]*>/gi)];
-                imgTags.forEach(tag => {
-                    if (urls.length >= 80) return;
-                    const srcMatch = tag[0].match(/src=\"([^\"]+pinimg[^\"]+)\"/i);
-                    const candidate = srcMatch ? srcMatch[1] : "";
-                    const id = candidate ? getId(candidate) : "";
-                    if (candidate && id && isValidPin(candidate) && !seenIds.has(id)) {
-                        seenIds.add(id);
-                        urls.push(candidate);
-                    }
-                });
-                // Direct pinimg links anywhere
                 const pinRegex = /https?:\/\/i\.pinimg\.com\/[^\s"'\\]+?\.(?:jpg|jpeg|png)/gi;
                 let m;
+                const seen = new Set();
                 while ((m = pinRegex.exec(normalized)) && urls.length < 80) {
-                    const candidate = m[0];
-                    const id = getId(candidate);
-                    if (isValidPin(candidate) && id && !seenIds.has(id)) {
-                        seenIds.add(id);
-                        urls.push(candidate);
-                    }
+                   if (!seen.has(m[0])) { seen.add(m[0]); urls.push(m[0]); }
                 }
                 sendResponse({ urls });
             })
