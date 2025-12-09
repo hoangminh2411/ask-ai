@@ -1,6 +1,46 @@
 // Shared prompt registry for toolbar + sidepanel
 window.ASKGPT_PROMPTS = [
   {
+    id: "analyze-dom",
+    label: "Phân tích UI (Agent)",
+    icon: "icons/prompt-action.svg",
+    surfaces: [],
+    text: `Bạn là AI Automation Assistant. Nhiệm vụ: Phân tích sâu nội dung và cấu trúc trang web để giúp người dùng hiểu rõ và điều khiển nó.
+
+QUAN TRỌNG NHẤT - CÁCH TÌM ID:
+- Tìm \`[TAG:123]\` -> Số \`123\` là ID.
+- BẮT BUỘC dùng đúng ID để tạo nút bấm.
+
+CONTEXT (Semantic DOM):
+{{context}}
+
+YÊU CẦU OUTPUT (Markdown):
+
+### 1. 📝 Phân tích chuyên sâu (Deep Analysis)
+*Viết đoạn văn phân tích chi tiết mục đích và giá trị cốt lõi của trang này.*
+- **Nội dung chính:** ...
+- **Điểm nổi bật/Insight:** ...
+
+### 2. � Gợi ý tìm hiểu (Discovery)
+*Đề xuất 3 câu hỏi thú vị để người dùng hỏi bạn thêm về trang này:*
+- "..."
+- "..."
+- "..."
+
+### 3. 🚀 Actions (Điều khiển)
+*Các nút bấm thực tế để thao tác trên trang.*
+
+**🎯 Key Actions:**
+- [👉 <Tên Action> (ID: <số>)](#ask-action-<số>)
+- [👉 <Tên Action> (ID: <số>)](#ask-action-<số>)
+- [📷 Xem toàn bộ ảnh (ID: view_images)](#ask-action-view_images) *(Nếu có nhiều ảnh)*
+
+**LƯU Ý:**
+1. **NO FAKE IDs:** Chỉ dùng ID có thật trong Context.
+2. **Format:** \`[Tên(ID: <số>)](#ask-action-<số>)\`.`,
+    description: "Phân tích cấu trúc trang để định hướng Automation."
+  },
+  {
     id: "explain",
     label: "Explain",
     icon: "icons/prompt-explain.svg",
@@ -37,8 +77,39 @@ window.ASKGPT_PROMPTS = [
     label: "TL;DR",
     icon: "icons/prompt-tldr.svg",
     surfaces: ['toolbar', 'panel'],
-    text: "Summarize the core facts into 3-5 crisp bullets. Lead with the most important points and quantify if possible.",
-    description: "Short bullet summary (3-5)."
+    text: `Hãy đóng vai một Chuyên gia Phân tích Nội dung (Senior Content Analyst). Nhiệm vụ của bạn là đọc nội dung trang web được cung cấp và viết một bản TÓM TẮT CHUYÊN SÂU (Comprehensive Summary).
+
+CONTEXT (Page Content):
+{{context}}
+
+YÊU CẦU ĐẦU RA (Bắt buộc dùng Markdown):
+
+### 1. 📝 Tổng quan (Overview)
+*Viết một đoạn văn (khoảng 3-5 câu) tóm tắt bao quát nội dung chính của trang. Mục đích của trang là gì? Nó dành cho ai?*
+
+### 2. 🔑 Điểm chính (Key Takeaways)
+*Liệt kê 5-7 điểm quan trọng nhất, chi tiết và có giá trị:*
+- **[Điểm 1]:** Giải thích chi tiết...
+- **[Điểm 2]:** Giải thích chi tiết...
+- ...
+
+### 3. 💡 Phân tích sâu (Insights)
+*Nếu là bài viết/tin tức:* Phân tích quan điểm, lập luận chính.
+*Nếu là sản phẩm:* Phân tích ưu/nhược điểm hoặc tính năng nổi bật.
+
+### 4. 📌 Kết luận
+*1 câu chốt lại giá trị của nội dung này.*
+
+### 5. ❓ Câu hỏi gợi ý (Discovery)
+*Gợi ý 3 câu hỏi sâu để người dùng tìm hiểu thêm:*
+- "Chi tiết về..."
+- "So sánh với..."
+
+LƯU Ý:
+- KHÔNG viết quá ngắn. Hãy khai thác tối đa thông tin từ Context.
+- Bỏ qua các thành phần điều hướng (menu, footer) vô nghĩa.
+- Giọng văn: Chuyên nghiệp, khách quan, dễ hiểu.`,
+    description: "Tóm tắt nội dung chính."
   },
   {
     id: "action",
@@ -93,4 +164,3 @@ window.ASKGPT_REWRITE_OPTIONS = [
     text: "Rewrite the text into a significantly shorter version while preserving the core meaning, essential facts, and key terminology."
   }
 ];
-

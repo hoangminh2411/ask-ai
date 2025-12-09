@@ -18,7 +18,14 @@ async function getFinalHTMLAndClose(windowId, tabId, initialCount, providerKey) 
     });
 
     try {
-        await chrome.windows.update(windowId, { state: 'minimized' });
+        // await chrome.windows.update(windowId, { state: 'minimized' });
+        await chrome.windows.remove(windowId);
+        // Reset state if needed (though managers usually handle this via ensuring new window)
+        // But we should nullify the manager entry to be safe
+        if (self.ASKGPT_BG.MANAGERS[providerKey].windowId === windowId) {
+            self.ASKGPT_BG.MANAGERS[providerKey].windowId = null;
+            self.ASKGPT_BG.MANAGERS[providerKey].tabId = null;
+        }
     } catch (e) { }
 
     return result;
@@ -38,14 +45,14 @@ async function waitForChatGptStable(windowId, tabId, initialCount, port) {
             const hasNew = bubbles.length > startCount;
             // Wait longer if no new bubble yet; shorter if one exists but still streaming.
             const waitMs = hasNew ? 12000 : 20000;
-            await ctx.waitForChatGptStableAnswer(waitMs).catch(() => {});
+            await ctx.waitForChatGptStableAnswer(waitMs).catch(() => { });
             const all = document.querySelectorAll(sel);
             const html = all.length > startCount ? all[all.length - 1].innerHTML : "";
             return { html, count: all.length };
         },
         args: [initialCount]
     });
-    try { await chrome.windows.update(windowId, { state: 'minimized' }); } catch (_) {}
+    // try { await chrome.windows.update(windowId, { state: 'minimized' }); } catch (_) { }
     return result;
 }
 
@@ -55,7 +62,16 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
             const res = await waitForChatGptStable(windowId, tabId, initialCount, port);
             if (res?.html && res.html.length > 0) {
                 port.postMessage({ status: 'success', answer: res.html });
-                setTimeout(() => self.ASKGPT_BG.detachDebugger(tabId), 1000);
+
+                // USER REQUEST: Close tab after chat
+                setTimeout(async () => {
+                    await self.ASKGPT_BG.detachDebugger(tabId);
+                    try { await chrome.windows.remove(windowId); } catch (e) { }
+                    if (self.ASKGPT_BG.MANAGERS.chatgpt_web.windowId === windowId) {
+                        self.ASKGPT_BG.MANAGERS.chatgpt_web.windowId = null;
+                        self.ASKGPT_BG.MANAGERS.chatgpt_web.tabId = null;
+                    }
+                }, 1000);
                 return;
             }
         } catch (e) {
@@ -125,8 +141,8 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
         } else {
             port.postMessage({ status: 'error', error: errorMsg });
         }
-        setTimeout(() => self.ASKGPT_BG.detachDebugger(tabId), 1000);
     }
+    setTimeout(() => self.ASKGPT_BG.detachDebugger(tabId), 1000);
 }
 
 self.ASKGPT_BG = Object.assign(self.ASKGPT_BG || {}, {

@@ -21,6 +21,7 @@
     "sidePanel"
   ],
   "host_permissions": [
+    "<all_urls>",
     "https://chatgpt.com/*",
     "https://gemini.google.com/*",
     "https://generativelanguage.googleapis.com/*",

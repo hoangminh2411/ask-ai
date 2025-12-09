@@ -23,20 +23,33 @@ async function ensureWindow(providerKey, port) {
                 return { windowId: mgr.windowId, tabId: mgr.tabId };
             }
         }
-    } catch (e) {}
+    } catch (e) { }
 
-    let leftPos = 0, topPos = 0;
+    let leftPos = 100, topPos = 100;
     try {
         const currentWin = await chrome.windows.getLastFocused();
-        leftPos = currentWin.left + currentWin.width;
-        topPos = currentWin.top + currentWin.height;
-    } catch (e) {}
+        if (currentWin.width && currentWin.height) {
+            // Align top-right of the current window
+            leftPos = (currentWin.left + currentWin.width) - 520;
+            topPos = currentWin.top + 50;
+
+            // Simple bounds check (heuristic)
+            if (leftPos < 0) leftPos = 50;
+            if (topPos < 0) topPos = 50;
+        }
+    } catch (e) { }
+
+    let finalUrl = mgr.url;
+    if (providerKey === 'chatgpt_web') {
+        const hasQuery = finalUrl.includes('?');
+        finalUrl += (hasQuery ? '&' : '?') + 'temporary-chat=true';
+    }
 
     const win = await chrome.windows.create({
-        url: mgr.url,
+        url: finalUrl,
         type: "popup",
-        width: 150, height: 150,
-        left: leftPos - 150, top: topPos - 150,
+        width: 500, height: 750,
+        left: Math.round(leftPos), top: Math.round(topPos),
         focused: true
     });
 
