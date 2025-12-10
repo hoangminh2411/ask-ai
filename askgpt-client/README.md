@@ -6,9 +6,9 @@
 
 ## 🎯 Overview
 
-AskGPT is a modular browser extension that integrates ChatGPT, Google Gemini, and Google Lens directly into your browsing experience. Work with AI through a floating toolbar, side panel chat, or keyboard shortcuts—all without leaving the webpage.
+AskGPT is a modular browser extension that integrates ChatGPT, Google Gemini, Perplexity, Microsoft Copilot, and Grok directly into your browsing experience. Work with AI through a floating toolbar, side panel chat, or keyboard shortcuts—all without leaving the webpage.
 
-**Version:** 3.0 | **Multi-Provider Support** (ChatGPT Web, Gemini Web, Gemini API)
+**Version:** 3.0 | **Multi-Provider Support** (ChatGPT, Gemini, Perplexity, Copilot, Grok)
 
 ---
 
@@ -18,7 +18,7 @@ AskGPT is a modular browser extension that integrates ChatGPT, Google Gemini, an
 - Select any text on a webpage → floating toolbar appears instantly
 - One-click access to quick prompts: Explain, Rewrite, Translate, Summarize, etc.
 - Drag-and-drop toolbar positioning
-- Direct sidepanel integration for detailed responses
+- Direct side panel integration for detailed responses
 
 ### 2. **Side Panel Chat Interface**
 - Full-featured chat panel with real-time responses
@@ -32,6 +32,9 @@ AskGPT is a modular browser extension that integrates ChatGPT, Google Gemini, an
 - **ChatGPT (Web)**: Automated browser control via debugger API
 - **Google Gemini (Web)**: Full Gemini web interface integration
 - **Google Gemini (API)**: Direct API mode for faster, private responses
+- **Perplexity AI**: Real-time web search and reasoning
+- **Microsoft Copilot**: Enterprise-grade AI assistance
+- **Grok (X.AI)**: Advanced reasoning and analysis
 - Easy provider switching in extension settings
 
 ### 4. **Google Lens Image Analysis**
@@ -88,6 +91,7 @@ AskGPT is a modular browser extension that integrates ChatGPT, Google Gemini, an
    - **ChatGPT Web**: Uses your logged-in ChatGPT account
    - **Gemini Web**: Uses your logged-in Google account
    - **Gemini API**: Enter your [Google Generative AI API key](https://aistudio.google.com/app/apikey)
+   - **Perplexity / Copilot / Grok**: Uses your logged-in web account
 3. Click **Save**
 
 ---
@@ -149,7 +153,7 @@ askgpt-client/
 ├── marked.min.js              # Markdown parser
 │
 ├── src/background/            # Background service worker modules
-│   ├── constants.js           # Shared constants (providers, URLs, etc.)
+│   ├── constants.js           # Shared constants & provider configs
 │   ├── controller.js          # Main port controller & request router
 │   ├── api.gemini.js          # Gemini API handler
 │   ├── sender.js              # Text injection & debugger automation
@@ -159,6 +163,7 @@ askgpt-client/
 │   ├── debugger.js            # Chrome debugger utilities
 │   ├── lens.js                # Google Lens integration
 │   ├── sidepanel.js           # Side panel message handling
+│   ├── window-bridge.js       # Window communication bridge
 │   └── menus-shortcuts.js     # Context menu & keyboard commands
 │
 ├── src/content/               # Content scripts (injected on all pages)
@@ -171,8 +176,10 @@ askgpt-client/
 │   ├── events.js              # DOM & runtime event listeners
 │   ├── sidepanel-launcher.js  # Side panel trigger logic
 │   ├── image-capture.js       # Screenshot capture utilities
+│   ├── chatgpt-observer.js    # ChatGPT response observer
 │   └── rewrite-plugin.js      # Text rewriting context menu
 │
+├── docs/                      # Additional documentation
 ├── icons/                     # Extension & prompt icons (SVG/PNG)
 └── README.md                  # This file
 ```
@@ -208,6 +215,7 @@ The extension uses a **modular architecture** for maintainability and extensibil
 | `sidepanel.js` | Manages all side panel message routing & state | Background |
 | `floating-button.js` | Creates & manages selection toolbar | Content |
 | `events.js` | Wires up all event listeners | Content |
+| `chatgpt-observer.js` | Observes ChatGPT response completion | Content |
 | `sidepanel.html` | UI layout, styling, initialization | UI |
 
 ---
@@ -300,6 +308,10 @@ The extension uses a **modular architecture** for maintainability and extensibil
   - Check network connectivity
   - API may be rate-limited (wait a minute before retrying)
 
+- **For Other Providers**:
+  - Ensure you're logged into the respective service
+  - Check provider website for service status
+
 ### Empty Image Results
 
 **Problem**: Image search returns blank grid
@@ -326,6 +338,8 @@ The extension uses a **modular architecture** for maintainability and extensibil
 - **For ChatGPT Web**: Responses reflect current ChatGPT knowledge
 - **For Gemini Web**: Responses reflect current Gemini knowledge
 - **For Gemini API**: Faster but uses API model (check [API limits](https://ai.google.dev/pricing))
+- **For Perplexity**: Uses real-time web search
+- **For Copilot/Grok**: Check respective service status
 - **Solution**: Try different provider in Settings for comparison
 
 ---
@@ -384,6 +398,9 @@ This project is provided as-is for educational and personal use.
 - **Google Lens**: For visual search & image analysis
 - **Google Gemini**: For fast, modern AI responses
 - **OpenAI ChatGPT**: For reliable, quality responses
+- **Perplexity AI**: For real-time web search capabilities
+- **Microsoft Copilot**: For enterprise AI assistance
+- **Grok (X.AI)**: For advanced reasoning
 - **Marked.js**: For markdown rendering
 - Built with ❤️ for productivity-focused developers
 
