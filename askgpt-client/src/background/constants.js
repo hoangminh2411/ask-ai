@@ -11,6 +11,24 @@ const MANAGERS = {
         tabId: null,
         url: "https://gemini.google.com/app",
         matchUrl: "https://gemini.google.com/*"
+    },
+    perplexity_web: {
+        windowId: null,
+        tabId: null,
+        url: "https://www.perplexity.ai",
+        matchUrl: "https://www.perplexity.ai/*"
+    },
+    copilot_web: {
+        windowId: null,
+        tabId: null,
+        url: "https://copilot.microsoft.com",
+        matchUrl: "https://copilot.microsoft.com/*"
+    },
+    grok_web: {
+        windowId: null,
+        tabId: null,
+        url: "https://grok.x.ai",
+        matchUrl: "https://grok.x.ai/*"
     }
 };
 

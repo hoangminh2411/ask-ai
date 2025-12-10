@@ -24,6 +24,9 @@
     "<all_urls>",
     "https://chatgpt.com/*",
     "https://gemini.google.com/*",
+    "https://www.perplexity.ai/*",
+    "https://copilot.microsoft.com/*",
+    "https://grok.x.ai/*",
     "https://generativelanguage.googleapis.com/*",
     "https://unsplash.com/*",
     "https://source.unsplash.com/*",
@@ -70,7 +73,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
       "js": [
         "marked.min.js",
         "prompts.js",
@@ -84,10 +89,20 @@
         "src/content/events.js",
         "src/content/image-capture.js",
         "content.js"
-    ],
+      ],
       "css": [
         "content.css"
       ]
+    },
+    {
+      "matches": [
+        "https://chatgpt.com/*"
+      ],
+      "js": [
+        "src/content/state.js",
+        "src/content/chatgpt-observer.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
@@ -97,7 +112,9 @@
         "icons/*.svg",
         "icons/*.png"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

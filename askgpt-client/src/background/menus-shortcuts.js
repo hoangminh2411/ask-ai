@@ -2,9 +2,9 @@
 
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
-      id: "askgpt-summarize-page",
-      title: "Summarize this page (Side Panel)",
-      contexts: ["page", "selection"]
+        id: "askgpt-summarize-page",
+        title: "Summarize this page (Side Panel)",
+        contexts: ["page", "selection"]
     });
 });
 
@@ -155,7 +155,7 @@ async function performDebugPasteToActive() {
         await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyUp", windowsVirtualKeyCode: 86, nativeVirtualKeyCode: 86, key: "v", code: "KeyV", modifiers: 2 });
         await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyUp", windowsVirtualKeyCode: 17, nativeVirtualKeyCode: 17, key: "Control", code: "ControlLeft" });
     } finally {
-        await chrome.debugger.detach(target).catch(() => {});
+        await chrome.debugger.detach(target).catch(() => { });
     }
 }
 
@@ -184,6 +184,71 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         performDebugPasteToActive()
             .then(() => sendResponse({ ok: true }))
             .catch((err) => sendResponse({ ok: false, error: err?.message || "debug paste failed" }));
+        return true;
+    } else if (msg.action === "askgpt_paste_image") {
+        // Auto-paste image to AI with prompt
+        const promptText = msg.prompt || "What is this? Explain in detail.";
+
+        (async () => {
+            try {
+                const config = await chrome.storage.sync.get(['ai_provider']);
+                const provider = config.ai_provider || 'chatgpt_web';
+
+                // Provider URLs
+                const PROVIDER_URLS = {
+                    'chatgpt_web': 'https://chatgpt.com/',
+                    'gemini_web': 'https://gemini.google.com/app',
+                    'perplexity_web': 'https://www.perplexity.ai/',
+                    'copilot_web': 'https://copilot.microsoft.com/',
+                    'grok_web': 'https://grok.x.ai/'
+                };
+
+                const url = PROVIDER_URLS[provider] || PROVIDER_URLS['chatgpt_web'];
+                const urlMatch = new URL(url).hostname;
+
+                let tab;
+
+                // Try to find existing AI tab
+                const allTabs = await chrome.tabs.query({});
+                const existingTab = allTabs.find(t => t.url?.includes(urlMatch));
+
+                if (existingTab) {
+                    await chrome.tabs.update(existingTab.id, { active: true });
+                    await chrome.windows.update(existingTab.windowId, { focused: true });
+                    tab = existingTab;
+                } else {
+                    tab = await chrome.tabs.create({ url, active: true });
+                    await new Promise(r => setTimeout(r, 2500));
+                }
+
+                // Focus input
+                await focusLikelyInput(tab.id);
+                await new Promise(r => setTimeout(r, 300));
+
+                // Paste image using debugger
+                const target = { tabId: tab.id };
+                await chrome.debugger.attach(target, "1.3");
+                try {
+                    // Paste image (Ctrl+V)
+                    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyDown", windowsVirtualKeyCode: 17, key: "Control", code: "ControlLeft" });
+                    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyDown", windowsVirtualKeyCode: 86, key: "v", code: "KeyV", modifiers: 2 });
+                    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyUp", windowsVirtualKeyCode: 86, key: "v", code: "KeyV", modifiers: 2 });
+                    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", { type: "keyUp", windowsVirtualKeyCode: 17, key: "Control", code: "ControlLeft" });
+
+                    await new Promise(r => setTimeout(r, 500));
+
+                    // Type prompt text
+                    await chrome.debugger.sendCommand(target, "Input.insertText", { text: promptText });
+
+                    sendResponse({ ok: true });
+                } finally {
+                    await chrome.debugger.detach(target).catch(() => { });
+                }
+            } catch (err) {
+                console.error('[PasteImage] Error:', err);
+                sendResponse({ ok: false, error: err?.message });
+            }
+        })();
         return true;
     }
 });

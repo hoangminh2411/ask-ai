@@ -1,69 +1,171 @@
 // Polling logic to detect completion and fetch final HTML
+// v2.0 - Added keep-alive scroll and improved response extraction
 
-async function getFinalHTMLAndClose(windowId, tabId, initialCount, providerKey) {
-    await chrome.windows.update(windowId, { focused: true, state: 'normal' });
-    await new Promise(r => setTimeout(r, 2000));
+// Keep tab alive by scrolling periodically
+async function keepTabAlive(tabId) {
+    try {
+        await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => {
+                // Scroll response into view
+                const containers = [
+                    document.querySelector('[class*="react-scroll-to-bottom"]'),
+                    document.querySelector('[class*="overflow-y-auto"]'),
+                    document.querySelector('main')
+                ];
 
+                for (const container of containers) {
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                        break;
+                    }
+                }
+
+                // Trigger mouse event to keep page active
+                document.dispatchEvent(new MouseEvent('mousemove', {
+                    bubbles: true,
+                    clientX: Math.random() * 100,
+                    clientY: Math.random() * 100
+                }));
+            }
+        });
+    } catch (e) { }
+}
+
+// Get FULL response from the last conversation turn
+async function getFullResponse(tabId, initialCount, providerKey) {
     const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId },
         func: (startCount, pk) => {
+            if (pk === 'chatgpt_web') {
+                // Get from conversation turn for complete content
+                const turns = document.querySelectorAll('[data-testid="conversation-turn"]');
+                const lastTurn = turns[turns.length - 1];
+                const isAssistant = lastTurn?.querySelector('[data-message-author-role="assistant"]');
+
+                if (isAssistant) {
+                    const markdown = lastTurn.querySelector('.markdown');
+                    if (markdown) {
+                        return {
+                            html: markdown.innerHTML,
+                            text: markdown.innerText
+                        };
+                    }
+                }
+            }
+
+            // Fallback to direct selector
             const selector = pk === 'chatgpt_web' ? '.markdown' : '.model-response-text, .message-content';
             const all = document.querySelectorAll(selector);
             if (all.length > startCount) {
-                return all[all.length - 1].innerHTML;
+                const last = all[all.length - 1];
+                return {
+                    html: last.innerHTML,
+                    text: last.innerText
+                };
             }
-            return "";
+            return { html: '', text: '' };
         },
         args: [initialCount, providerKey]
     });
 
+    return result;
+}
+
+async function getFinalHTMLAndClose(windowId, tabId, initialCount, providerKey) {
+    await chrome.windows.update(windowId, { focused: true });
+    await new Promise(r => setTimeout(r, 2000));
+
+    const response = await getFullResponse(tabId, initialCount, providerKey);
+
+    console.debug(`[Polling] Final response: ${response.text?.length || 0} chars`);
+
     try {
-        // await chrome.windows.update(windowId, { state: 'minimized' });
         await chrome.windows.remove(windowId);
-        // Reset state if needed (though managers usually handle this via ensuring new window)
-        // But we should nullify the manager entry to be safe
         if (self.ASKGPT_BG.MANAGERS[providerKey].windowId === windowId) {
             self.ASKGPT_BG.MANAGERS[providerKey].windowId = null;
             self.ASKGPT_BG.MANAGERS[providerKey].tabId = null;
         }
     } catch (e) { }
 
-    return result;
+    return response.html;
 }
 
 async function waitForChatGptStable(windowId, tabId, initialCount, port) {
     port.postMessage({ status: 'progress', message: "AI is writing..." });
-    await chrome.windows.update(windowId, { focused: true, state: 'normal' });
-    // Ask the content-side observer to wait for a stable answer, then return last html.
-    const [{ result }] = await chrome.scripting.executeScript({
-        target: { tabId },
-        func: async (startCount) => {
-            const ctx = window.ASKGPT_CONTENT;
-            if (!ctx?.waitForChatGptStableAnswer) throw new Error("observer not loaded");
-            const sel = '.markdown';
-            const bubbles = document.querySelectorAll(sel);
-            const hasNew = bubbles.length > startCount;
-            // Wait longer if no new bubble yet; shorter if one exists but still streaming.
-            const waitMs = hasNew ? 12000 : 20000;
-            await ctx.waitForChatGptStableAnswer(waitMs).catch(() => { });
-            const all = document.querySelectorAll(sel);
-            const html = all.length > startCount ? all[all.length - 1].innerHTML : "";
-            return { html, count: all.length };
-        },
-        args: [initialCount]
-    });
-    // try { await chrome.windows.update(windowId, { state: 'minimized' }); } catch (_) { }
-    return result;
+    await chrome.windows.update(windowId, { focused: true });
+
+    // Start keep-alive scroll interval
+    const keepAliveInterval = setInterval(() => keepTabAlive(tabId), 2000);
+
+    try {
+        const [{ result }] = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: async (startCount) => {
+                const ctx = window.ASKGPT_CONTENT;
+                if (!ctx?.waitForChatGptStableAnswer) throw new Error("observer not loaded");
+
+                const sel = '.markdown';
+                const bubbles = document.querySelectorAll(sel);
+                const hasNew = bubbles.length > startCount;
+
+                // Extended timeout for longer responses
+                const waitMs = hasNew ? 60000 : 30000;
+                await ctx.waitForChatGptStableAnswer(waitMs).catch(() => { });
+
+                // Get FULL response from conversation turn
+                const turns = document.querySelectorAll('[data-testid="conversation-turn"]');
+                const lastTurn = turns[turns.length - 1];
+                const isAssistant = lastTurn?.querySelector('[data-message-author-role="assistant"]');
+
+                let html = '';
+                let text = '';
+
+                if (isAssistant) {
+                    const markdown = lastTurn.querySelector('.markdown');
+                    if (markdown) {
+                        html = markdown.innerHTML;
+                        text = markdown.innerText;
+                    }
+                }
+
+                // Fallback
+                if (!html) {
+                    const all = document.querySelectorAll(sel);
+                    if (all.length > startCount) {
+                        html = all[all.length - 1].innerHTML;
+                        text = all[all.length - 1].innerText;
+                    }
+                }
+
+                return { html, text, count: document.querySelectorAll(sel).length };
+            },
+            args: [initialCount]
+        });
+
+        clearInterval(keepAliveInterval);
+        return result;
+
+    } catch (e) {
+        clearInterval(keepAliveInterval);
+        throw e;
+    }
 }
 
 async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
+    // Start keep-alive interval
+    const keepAliveInterval = setInterval(() => keepTabAlive(tabId), 2000);
+
     if (providerKey === 'chatgpt_web') {
         try {
             const res = await waitForChatGptStable(windowId, tabId, initialCount, port);
+            clearInterval(keepAliveInterval);
+
             if (res?.html && res.html.length > 0) {
+                console.debug(`[Polling] Success: ${res.text?.length || res.html.length} chars`);
                 port.postMessage({ status: 'success', answer: res.html });
 
-                // USER REQUEST: Close tab after chat
+                // Close window after chat
                 setTimeout(async () => {
                     await self.ASKGPT_BG.detachDebugger(tabId);
                     try { await chrome.windows.remove(windowId); } catch (e) { }
@@ -77,17 +179,20 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
         } catch (e) {
             console.warn("waitForChatGptStable failed, falling back to legacy polling", e);
         }
-        // If observer fails, continue with legacy polling below.
     }
 
+    // Legacy polling fallback
     let lastRawLength = 0;
     let stableCount = 0;
-    let consecutiveDoneChecks = 0;
+    let lastChangeTime = Date.now();
     let attempts = 0;
 
     const interval = setInterval(async () => {
         attempts++;
-        if (attempts > 300) { finish("Timeout.", false); return; }
+        if (attempts > 720) { // Extended to 6 minutes
+            finish("Timeout.", false);
+            return;
+        }
 
         try {
             const [{ result }] = await chrome.scripting.executeScript({
@@ -97,26 +202,32 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
             });
 
             if (result.hasText) {
-                if (result.rawLength === lastRawLength) {
-                    stableCount++;
-                } else {
+                // === PRIMARY: Text length stability ===
+                if (result.rawLength !== lastRawLength) {
+                    // Text is still growing - reset stability
                     stableCount = 0;
                     lastRawLength = result.rawLength;
-                    consecutiveDoneChecks = 0;
-                    port.postMessage({ status: 'progress', message: "AI đang viết..." });
+                    lastChangeTime = Date.now();
+                    port.postMessage({ status: 'progress', message: `AI đang viết... (${result.rawLength} chars)` });
+                } else {
+                    // Text hasn't changed - increment stability
+                    stableCount++;
                 }
 
-                if (providerKey === 'chatgpt_web') {
-                    if (!result.isGenerating && result.isSendReady) consecutiveDoneChecks++;
-                    else consecutiveDoneChecks = 0;
+                const timeSinceChange = Date.now() - lastChangeTime;
+                const stabilityThreshold = 3000; // 3 seconds
 
-                    if (consecutiveDoneChecks >= 3 || stableCount >= 25) {
-                        finish("", true);
-                    }
-                } else {
-                    if (stableCount >= 10) {
-                        finish("", true);
-                    }
+                // === COMPLETION: Text stable for threshold time ===
+                const hasContent = result.rawLength > 10;
+                const textIsStable = timeSinceChange > stabilityThreshold && stableCount >= 6;
+
+                // Button confirms is secondary
+                const buttonConfirms = result.isSendReady && !result.isGenerating;
+                const veryStable = timeSinceChange > (stabilityThreshold * 2);
+
+                if (hasContent && textIsStable && (buttonConfirms || veryStable)) {
+                    console.debug(`[Polling] Complete: ${result.rawLength} chars, stable ${timeSinceChange}ms`);
+                    finish("", true);
                 }
             }
         } catch (e) { }
@@ -124,6 +235,7 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
 
     async function finish(errorMsg, success) {
         clearInterval(interval);
+        clearInterval(keepAliveInterval);
 
         if (success) {
             port.postMessage({ status: 'progress', message: "Đang lấy kết quả..." });
@@ -147,5 +259,7 @@ async function pollUntilDone(windowId, tabId, initialCount, providerKey, port) {
 
 self.ASKGPT_BG = Object.assign(self.ASKGPT_BG || {}, {
     pollUntilDone,
-    getFinalHTMLAndClose
+    getFinalHTMLAndClose,
+    keepTabAlive,
+    getFullResponse
 });

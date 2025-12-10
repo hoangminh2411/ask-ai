@@ -1,4 +1,6 @@
 // Message counting and in-page status helpers
+// v2.0 - Updated for new ChatGPT DOM structure
+
 async function getMessageCount(tabId, provider) {
     try {
         const result = await chrome.scripting.executeScript({
@@ -15,11 +17,9 @@ async function getMessageCount(tabId, provider) {
 
 function checkStatusInPage(initialCount, providerKey) {
     let selector = '.markdown';
-    let stopBtnSel = '[data-testid="stop-button"]';
 
     if (providerKey === 'gemini_web') {
         selector = '.model-response-text, .message-content';
-        stopBtnSel = null;
     }
 
     const allBubbles = document.querySelectorAll(selector);
@@ -32,13 +32,33 @@ function checkStatusInPage(initialCount, providerKey) {
     }
 
     if (providerKey === 'chatgpt_web') {
-        const stopBtn = document.querySelector(stopBtnSel);
-        const sendBtn = document.querySelector('[data-testid="send-button"]');
+        // === NEW DETECTION: Use #composer-submit-button aria-label ===
+        const composerBtn = document.querySelector('#composer-submit-button');
+        let isGenerating = false;
+        let isSendReady = false;
+        let buttonLabel = '';
+
+        if (composerBtn) {
+            buttonLabel = composerBtn.getAttribute('aria-label') || '';
+            const label = buttonLabel.toLowerCase();
+            // "Stop streaming" = generating
+            isGenerating = label.includes('stop');
+            // "Send message" = ready
+            isSendReady = label.includes('send') && !composerBtn.disabled;
+        } else {
+            // Fallback for older ChatGPT versions
+            const stopBtn = document.querySelector('[data-testid="stop-button"]');
+            const sendBtn = document.querySelector('[data-testid="send-button"]');
+            isGenerating = !!stopBtn;
+            isSendReady = !!sendBtn && !sendBtn.disabled && !stopBtn;
+        }
+
         return {
-            isGenerating: !!stopBtn,
-            isSendReady: !!sendBtn && !sendBtn.disabled,
-            rawLength: rawLength,
-            hasText: rawLength > 0
+            isGenerating,
+            isSendReady,
+            rawLength,
+            hasText: rawLength > 0,
+            buttonLabel  // Include for debugging
         };
     } else {
         return {

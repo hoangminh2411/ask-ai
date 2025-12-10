@@ -46,10 +46,10 @@ if (window.ASKGPT_CONTENT.__floatLoaded) {
                 { label: "TL;DR", text: "Summarize into 3-5 bullets.", icon: "" }
             );
         }
-        // Append quick controls
+        // Append quick controls - text only, no icons
         promptList.push(
-            { label: "Panel", text: "", icon: "icons/prompt-panel.svg" },
-            { label: "Close", text: "__close__", icon: "icons/prompt-close.svg" }
+            { label: "→", text: "", icon: "" },  // Panel button
+            { label: "×", text: "__close__", icon: "" }  // Close button
         );
 
         const actions = document.createElement('div');

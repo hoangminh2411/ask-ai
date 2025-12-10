@@ -20,10 +20,8 @@ if (window.ASKGPT_CONTENT.__eventsLoaded) {
                 return;
             }
 
-            // 2. Determine Prompt ID
-            // User wants 'analyze-dom' for the Alt+S shortcut (summarize_page)
-            let targetPromptId = "analyze-dom";
-            // if (request.action === "summarize_page") targetPromptId = "summary"; // DISABLE this override
+            // 2. Determine Prompt ID - Alt+S = Summary page
+            let targetPromptId = "summary";
 
             const promptObj = (window.ASKGPT_PROMPTS || []).find(p => p.id === targetPromptId);
             const promptText = promptObj ? promptObj.text : `Bạn là AI Automation Assistant. Nhiệm vụ: Phân tích sâu nội dung và cấu trúc trang web để giúp người dùng hiểu rõ và điều khiển nó.

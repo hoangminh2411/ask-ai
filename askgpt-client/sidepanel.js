@@ -63,40 +63,61 @@ function appendBotMessage(text) {
     bubble.className = 'sp-bubble';
     bubble.style.position = 'relative'; // Support absolute icon
 
-    // 1. Render HTML cơ bản
+    // 1. Clean and normalize response text
     let finalHtml = text || "";
+
+    // Remove common AI prefixes/artifacts
+    finalHtml = finalHtml
+      .replace(/^(Assistant|AI|ChatGPT|Gemini|Perplexity|Copilot|Grok):\s*/i, '')
+      .replace(/^\*\*.*?:\*\*\s*/i, '')
+      .trim();
+
+    // 2. Parse markdown if needed
     if (typeof marked !== 'undefined' && !finalHtml.trim().startsWith('<')) {
-      finalHtml = marked.parse(finalHtml);
+      try {
+        finalHtml = marked.parse(finalHtml);
+      } catch (e) {
+        console.warn('[appendBotMessage] Markdown parse error:', e);
+      }
     }
+
+    // 3. Post-process images for responsive display
+    finalHtml = finalHtml.replace(/<img([^>]*)>/gi, (match, attrs) => {
+      if (!attrs.includes('style=')) {
+        return `<img${attrs} style="max-width:100%; border-radius:8px; margin:8px 0;">`;
+      }
+      return match;
+    });
+
     bubble.innerHTML = finalHtml;
 
-    // TTS Feature (Read Aloud)
+    // TTS Feature (Read Aloud) - positioned at top right
     const ttsBtn = document.createElement('button');
     ttsBtn.className = 'sp-tts-btn';
     ttsBtn.innerHTML = '🔊';
-    ttsBtn.title = "Đọc nội dung";
+    ttsBtn.title = "Read aloud";
     ttsBtn.style.cssText = `
         position: absolute;
-        bottom: 8px;
-        right: 8px;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #ddd;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
+        top: 6px;
+        right: 6px;
+        background: #f3f4f6;
+        border: none;
+        border-radius: 4px;
+        width: 24px;
+        height: 24px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        color: #555;
-        font-size: 16px;
-        opacity: 0.7;
-        z-index: 10;
-        transition: all 0.2s;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        color: #6b7280;
+        font-size: 12px;
+        opacity: 0;
+        z-index: 5;
+        transition: opacity 0.15s ease;
     `;
-    ttsBtn.onmouseover = () => ttsBtn.style.opacity = '1';
-    ttsBtn.onmouseout = () => ttsBtn.style.opacity = '0.6';
+    // Show on hover
+    bubble.onmouseenter = () => ttsBtn.style.opacity = '1';
+    bubble.onmouseleave = () => ttsBtn.style.opacity = '0';
 
     let isSpeaking = false;
     ttsBtn.onclick = () => {
@@ -1099,4 +1120,315 @@ function renderLensResults(payload) {
   scrollToBottom();
 }
 
+// ============================================
+// MODEL SELECTOR
+// ============================================
+(function initModelSelector() {
+  const btn = document.getElementById('sp-model-btn');
+  const dropdown = document.getElementById('sp-model-dropdown');
+  const nameEl = document.getElementById('sp-model-name');
 
+  if (!btn || !dropdown) return;
+
+  const PROVIDERS = {
+    'chatgpt_web': 'ChatGPT',
+    'gemini_web': 'Gemini',
+    'perplexity_web': 'Perplexity',
+    'copilot_web': 'Copilot',
+    'grok_web': 'Grok'
+  };
+
+  chrome.storage.sync.get('ai_provider', (result) => {
+    const current = result.ai_provider || 'chatgpt_web';
+    updateUI(current);
+  });
+
+  function updateUI(providerId) {
+    const name = PROVIDERS[providerId] || PROVIDERS['chatgpt_web'];
+    if (nameEl) nameEl.textContent = name;
+    dropdown.querySelectorAll('.sp-dropdown-option').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.provider === providerId);
+    });
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllDropdowns();
+    dropdown.classList.toggle('open');
+  });
+
+  dropdown.addEventListener('click', (e) => {
+    const option = e.target.closest('.sp-dropdown-option');
+    if (!option) return;
+    const providerId = option.dataset.provider;
+    chrome.storage.sync.set({ ai_provider: providerId }, () => {
+      updateUI(providerId);
+      dropdown.classList.remove('open');
+      chrome.runtime.sendMessage({ action: 'config_updated' });
+      setStatus(`Switched to ${PROVIDERS[providerId]}`);
+      setTimeout(() => setStatus(''), 2000);
+    });
+  });
+})();
+
+// ============================================
+// TOOLS SELECTOR
+// ============================================
+(function initToolsSelector() {
+  const btn = document.getElementById('sp-tools-btn');
+  const dropdown = document.getElementById('sp-tools-dropdown');
+
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllDropdowns();
+    dropdown.classList.toggle('open');
+  });
+
+  dropdown.addEventListener('click', (e) => {
+    const option = e.target.closest('.sp-dropdown-option');
+    if (!option) return;
+
+    dropdown.classList.remove('open');
+
+    // Handle actions
+    const action = option.dataset.action;
+    if (action === 'capture') {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: 'start_image_capture' });
+      });
+      return;
+    }
+    if (action === 'find-similar') {
+      // Start capture then find similar
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'start_image_capture' });
+          setStatus('Capture an image to find similar');
+        }
+      });
+      return;
+    }
+    if (action === 'images') {
+      // Get page images - improved UI
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'askgpt_get_images' }, (resp) => {
+            if (resp?.images?.length) {
+              const images = resp.images.slice(0, 12);
+              const html = `
+                <div style="margin-bottom:8px;font-weight:600;">📷 Found ${resp.images.length} images</div>
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+                  ${images.map((img, i) => `
+                    <div style="position:relative; border-radius:8px; overflow:hidden; background:#f3f4f6;">
+                      <img src="${img.src}" style="width:100%; height:80px; object-fit:cover; display:block;">
+                      <div style="position:absolute; bottom:0; left:0; right:0; display:flex; gap:2px; padding:4px; background:rgba(0,0,0,0.5);">
+                        <a href="${img.src}" download="image_${i + 1}" target="_blank" 
+                           style="flex:1; text-align:center; color:#fff; font-size:10px; padding:2px; background:rgba(0,0,0,0.3); border-radius:3px; text-decoration:none;">
+                          ⬇️
+                        </a>
+                        <a href="${img.src}" target="_blank" 
+                           style="flex:1; text-align:center; color:#fff; font-size:10px; padding:2px; background:rgba(0,0,0,0.3); border-radius:3px; text-decoration:none;">
+                          🔗
+                        </a>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+                ${resp.images.length > 12 ? `<div style="margin-top:8px; font-size:12px; color:#6b7280;">+ ${resp.images.length - 12} more images</div>` : ''}
+              `;
+              appendBotMessage(html);
+            } else {
+              appendBotMessage('No significant images found on this page.');
+            }
+          });
+        }
+      });
+      return;
+    }
+    if (action === 'summarize') {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: 'summarize_page' });
+      });
+      return;
+    }
+    if (action === 'analyze') {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: 'analyze_page' });
+      });
+      return;
+    }
+
+    // Handle mode selection (Custom = free chat)
+    const mode = option.dataset.mode;
+    if (mode === 'custom') {
+      // Just focus the input for free typing
+      const promptEl = document.getElementById('sp-prompt');
+      if (promptEl) {
+        promptEl.placeholder = 'Type anything...';
+        promptEl.focus();
+      }
+      setStatus('Custom mode - type freely');
+      setTimeout(() => setStatus(''), 2000);
+    }
+  });
+})();
+
+// Close all dropdowns helper
+function closeAllDropdowns() {
+  document.querySelectorAll('.sp-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.sp-selector-btn') && !e.target.closest('.sp-dropdown')) {
+    closeAllDropdowns();
+  }
+});
+
+
+// ============================================
+// WELCOME SCREEN TOGGLE
+// ============================================
+function toggleWelcome(show) {
+  const welcome = document.getElementById('sp-welcome');
+  const answer = document.getElementById('sp-answer');
+  if (welcome) welcome.classList.toggle('hidden', !show);
+  if (answer) answer.style.display = show ? 'none' : 'flex';
+}
+
+// Hide welcome when there are messages
+(function initWelcomeToggle() {
+  const answerSection = document.getElementById('sp-answer');
+  if (answerSection) {
+    const observer = new MutationObserver(() => {
+      if (answerSection.children.length > 0) {
+        toggleWelcome(false);
+      }
+    });
+    observer.observe(answerSection, { childList: true });
+  }
+})();
+
+// ============================================
+// CHAT HISTORY SYSTEM
+// ============================================
+const ChatHistory = {
+  MAX_MESSAGES: 50,
+  STORAGE_KEY: 'askgpt_chat_history',
+
+  // Save current chat to storage
+  save() {
+    const messages = [];
+    document.querySelectorAll('#sp-answer .sp-msg').forEach(msg => {
+      const isUser = msg.classList.contains('user');
+      const bubble = msg.querySelector('.sp-bubble');
+      if (!bubble) return;
+
+      if (isUser) {
+        const label = bubble.querySelector('.sp-user-label')?.textContent || '';
+        const text = bubble.querySelector('.sp-user-main')?.textContent || bubble.textContent;
+        messages.push({ role: 'user', content: text, label });
+      } else {
+        // For bot messages, save the raw text content
+        messages.push({ role: 'bot', content: bubble.innerHTML });
+      }
+    });
+
+    // Keep only last MAX_MESSAGES
+    const trimmed = messages.slice(-this.MAX_MESSAGES);
+
+    chrome.storage.local.set({ [this.STORAGE_KEY]: trimmed }, () => {
+      console.log('[ChatHistory] Saved', trimmed.length, 'messages');
+    });
+  },
+
+  // Load chat history from storage
+  load() {
+    return new Promise(resolve => {
+      chrome.storage.local.get(this.STORAGE_KEY, (result) => {
+        const messages = result[this.STORAGE_KEY] || [];
+        console.log('[ChatHistory] Loaded', messages.length, 'messages');
+        resolve(messages);
+      });
+    });
+  },
+
+  // Restore chat to UI
+  async restore() {
+    const messages = await this.load();
+    if (messages.length === 0) return;
+
+    const answerEl = document.getElementById('sp-answer');
+    if (!answerEl) return;
+
+    // Clear and rebuild
+    answerEl.innerHTML = '';
+
+    messages.forEach(msg => {
+      const div = document.createElement('div');
+      div.className = `sp-msg ${msg.role === 'user' ? 'user' : 'bot'}`;
+
+      if (msg.role === 'user') {
+        const parts = [];
+        if (msg.label) parts.push(`<div class="sp-user-label">${msg.label}</div>`);
+        parts.push(`<div class="sp-user-main">${msg.content}</div>`);
+        div.innerHTML = `<div class="sp-bubble">${parts.join('')}</div>`;
+      } else {
+        div.innerHTML = `<div class="sp-bubble">${msg.content}</div>`;
+      }
+
+      answerEl.appendChild(div);
+    });
+
+    toggleWelcome(false);
+    scrollToBottom();
+  },
+
+  // Clear history
+  clear() {
+    chrome.storage.local.remove(this.STORAGE_KEY, () => {
+      console.log('[ChatHistory] Cleared');
+    });
+    const answerEl = document.getElementById('sp-answer');
+    if (answerEl) answerEl.innerHTML = '';
+    toggleWelcome(true);
+  }
+};
+
+// Auto-save when new messages are added
+(function initChatHistorySave() {
+  const answerEl = document.getElementById('sp-answer');
+  if (!answerEl) return;
+
+  let saveTimeout = null;
+  const observer = new MutationObserver(() => {
+    // Debounce saving
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => ChatHistory.save(), 1000);
+  });
+
+  observer.observe(answerEl, { childList: true, subtree: true });
+})();
+
+// Restore history on load
+ChatHistory.restore();
+
+// Add clear button to header
+(function addClearButton() {
+  const actions = document.querySelector('.sp-actions');
+  if (!actions) return;
+
+  const clearBtn = document.createElement('button');
+  clearBtn.id = 'sp-clear-chat';
+  clearBtn.title = 'Clear chat';
+  clearBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>`;
+  clearBtn.onclick = () => {
+    if (confirm('Clear chat history?')) {
+      ChatHistory.clear();
+    }
+  };
+
+  actions.insertBefore(clearBtn, actions.firstChild);
+})();
