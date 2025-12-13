@@ -37,6 +37,9 @@ async function getFullResponse(tabId, initialCount, providerKey) {
     const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId },
         func: (startCount, pk) => {
+            // ========================================
+            // CHATGPT RESPONSE EXTRACTION
+            // ========================================
             if (pk === 'chatgpt_web') {
                 // Get from conversation turn for complete content
                 const turns = document.querySelectorAll('[data-testid="conversation-turn"]');
@@ -54,17 +57,299 @@ async function getFullResponse(tabId, initialCount, providerKey) {
                 }
             }
 
-            // Fallback to direct selector
-            const selector = pk === 'chatgpt_web' ? '.markdown' : '.model-response-text, .message-content';
-            const all = document.querySelectorAll(selector);
-            if (all.length > startCount) {
-                const last = all[all.length - 1];
+            // ========================================
+            // PERPLEXITY RESPONSE EXTRACTION
+            // ========================================
+            if (pk === 'perplexity_web') {
+                console.log('[Perplexity] Starting extraction...');
+
+                // Perplexity structure:
+                // - Main answer in prose sections  
+                // - Sources/citations
+                // - "Related" questions section (EXCLUDE THIS)
+
+                // Helper: Check if element is in "related" section
+                const isRelatedSection = (el) => {
+                    const className = (el.className || '').toLowerCase();
+                    const parentClass = (el.parentElement?.className || '').toLowerCase();
+                    const grandparentClass = (el.parentElement?.parentElement?.className || '').toLowerCase();
+                    const gggClass = (el.parentElement?.parentElement?.parentElement?.className || '').toLowerCase();
+
+                    // Check for "related" keywords in all ancestor classes
+                    const allClasses = className + ' ' + parentClass + ' ' + grandparentClass + ' ' + gggClass;
+                    if (allClasses.includes('related') || allClasses.includes('suggestion')) {
+                        console.log('[Perplexity] Skipping related:', className.slice(0, 30));
+                        return true;
+                    }
+
+                    // Check inner text for "Related" header
+                    const headerText = el.querySelector('h1, h2, h3, h4, h5, span')?.innerText?.toLowerCase() || '';
+                    if (headerText.includes('related') || headerText.includes('people also')) {
+                        console.log('[Perplexity] Skipping related header:', headerText.slice(0, 30));
+                        return true;
+                    }
+
+                    return false;
+                };
+
+                // Strategy 1: Find the main answer container (largest prose, not related)
+                const proseElements = document.querySelectorAll('.prose, [class*="prose"], [class*="answer"], article, [class*="markdown"]');
+                console.log('[Perplexity] Found', proseElements.length, 'prose elements');
+
+                let mainContainer = null;
+                let maxLength = 0;
+
+                for (const el of proseElements) {
+                    // Skip related sections
+                    if (isRelatedSection(el)) continue;
+
+                    // Skip tiny elements (likely just a question snippet)
+                    const text = el.innerText || '';
+                    if (text.length < 100) {
+                        console.log('[Perplexity] Skipping tiny element:', text.length, 'chars');
+                        continue;
+                    }
+
+                    // Check if this is just a child of a larger container
+                    const parent = el.parentElement;
+                    if (parent && proseElements.length > 1) {
+                        const parentText = parent.innerText || '';
+                        // If parent has same text length, skip child
+                        if (Math.abs(parentText.length - text.length) < 50) {
+                            console.log('[Perplexity] Skipping nested element');
+                            continue;
+                        }
+                    }
+
+                    console.log('[Perplexity] Candidate found:', text.length, 'chars, class:', (el.className || '').slice(0, 40));
+
+                    // Prefer largest content
+                    if (text.length > maxLength) {
+                        maxLength = text.length;
+                        mainContainer = el;
+                    }
+                }
+
+                console.log('[Perplexity] Main container found:', maxLength, 'chars');
+
+                // Strategy 2: If no single container, combine all prose sections
+                if (!mainContainer || maxLength < 100) {
+                    const validProse = [];
+                    const allProse = document.querySelectorAll('.prose');
+
+                    for (const el of allProse) {
+                        if (isRelatedSection(el)) continue;
+                        const text = (el.innerText || '').trim();
+                        if (text.length > 30) {
+                            validProse.push(el);
+                        }
+                    }
+
+                    if (validProse.length > 0) {
+                        // Combine all valid prose sections
+                        let combinedHtml = '';
+                        let combinedText = '';
+
+                        for (const prose of validProse) {
+                            combinedHtml += prose.innerHTML + '\n';
+                            combinedText += prose.innerText + '\n';
+                        }
+
+                        if (combinedText.length > 50) {
+                            return {
+                                html: combinedHtml,
+                                text: combinedText.trim(),
+                                method: 'perplexity_combined'
+                            };
+                        }
+                    }
+                }
+
+                if (mainContainer) {
+                    let mainHtml = mainContainer.innerHTML;
+
+                    // Get sources/citations
+                    const sourcesSelectors = [
+                        '[class*="source"]',
+                        '[class*="citation"]',
+                        'a[href*="http"]:not([href*="perplexity"])'
+                    ];
+
+                    let sourcesHtml = '';
+                    const seenSources = new Set();
+
+                    for (const sel of sourcesSelectors) {
+                        try {
+                            const sources = document.querySelectorAll(sel);
+                            sources.forEach(src => {
+                                // Skip if in related section
+                                if (isRelatedSection(src)) return;
+
+                                const href = src.href || src.querySelector('a')?.href;
+                                if (href && !seenSources.has(href) && seenSources.size < 10) {
+                                    seenSources.add(href);
+                                    const title = (src.innerText || src.title || href).slice(0, 80);
+                                    sourcesHtml += `<a href="${href}" target="_blank">${title}</a><br>`;
+                                }
+                            });
+                        } catch (e) { }
+                    }
+
+                    if (sourcesHtml && seenSources.size > 0) {
+                        mainHtml += `<div class="sp-perplexity-sources"><strong>Sources:</strong><br>${sourcesHtml}</div>`;
+                    }
+
+                    return {
+                        html: mainHtml,
+                        text: mainContainer.innerText,
+                        method: 'perplexity_main'
+                    };
+                }
+
+                // Fallback: get ALL visible content except related
+            }
+
+            // ========================================
+            // GEMINI RESPONSE EXTRACTION
+            // ========================================
+            if (pk === 'gemini_web') {
+                const selectors = [
+                    '.model-response-text',
+                    '.message-content',
+                    '[class*="response"]',
+                    '[class*="model-response"]'
+                ];
+
+                for (const sel of selectors) {
+                    const elements = document.querySelectorAll(sel);
+                    if (elements.length > startCount) {
+                        const last = elements[elements.length - 1];
+                        return {
+                            html: last.innerHTML,
+                            text: last.innerText
+                        };
+                    }
+                }
+            }
+
+            // ========================================
+            // SMART UNIVERSAL DETECTION (Final Fallback)
+            // ========================================
+            // Use scoring heuristics to find the most likely response
+
+            function scoreElement(el) {
+                let score = 0;
+                const style = getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden') return 0;
+
+                const rect = el.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) return 0;
+
+                const text = el.innerText || '';
+                const html = el.innerHTML || '';
+                const className = (el.className || '').toLowerCase();
+                const id = (el.id || '').toLowerCase();
+
+                // Get parent/ancestor classes for context
+                const parentClass = (el.parentElement?.className || '').toLowerCase();
+                const grandparentClass = (el.parentElement?.parentElement?.className || '').toLowerCase();
+                const allClasses = className + ' ' + parentClass + ' ' + grandparentClass + ' ' + id;
+
+                if (text.length < 50) return 0; // Minimum content threshold
+
+                // ========================================
+                // NEGATIVE: EXCLUDE THESE (check first!)
+                // ========================================
+
+                // Related questions / suggestions
+                if (allClasses.includes('related') || allClasses.includes('suggestion')) return -1;
+                const headerText = (el.querySelector('h1, h2, h3, h4, h5')?.innerText || '').toLowerCase();
+                if (headerText.includes('related') || headerText.includes('similar')) return -1;
+
+                // Input/user elements
+                if (el.matches('textarea, input, [contenteditable="true"]')) return -1;
+                if (className.includes('user') || className.includes('human') || className.includes('query')) return -1;
+                if (el.closest('[data-message-author-role="user"]')) return -1;
+
+                // Navigation/chrome
+                if (el.matches('nav, header, footer, aside') || el.closest('nav, header, footer, aside')) return -1;
+                if (el.matches('button, a') && text.length < 200) return -1;
+
+                // ========================================
+                // POSITIVE SIGNALS
+                // ========================================
+
+                // Text length is MOST IMPORTANT (longer = more likely full response)
+                score += Math.min(text.length / 50, 80); // Max 80 points for length
+
+                // Markdown/prose indicators
+                if (/<(p|ul|ol|h[1-6]|pre|code|blockquote)>/i.test(html)) score += 15;
+                if (className.includes('prose') || className.includes('markdown')) score += 25;
+                if (className.includes('answer') && !allClasses.includes('related')) score += 30;
+
+                // AI assistant role
+                if (className.includes('assistant') || className.includes('bot') || className.includes('ai-')) score += 20;
+                if (el.closest('[data-message-author-role="assistant"]')) score += 35;
+
+                // Rich content (code, lists)
+                if (el.querySelector('pre code')) score += 12;
+                if (el.querySelector('ul, ol')) score += 8;
+
+                // Width suggests main content area
+                if (rect.width > 500) score += 10;
+                if (rect.height > 200) score += 10;
+
+                // NOTE: Removed bottom-of-page bonus - was causing related questions to win
+
+                return score;
+            }
+
+            // Gather candidates from common patterns
+            const selectors = [
+                '.markdown', '.prose', '[class*="prose"]',
+                '[class*="message"]:not([class*="user"])',
+                '[class*="response"]', '[class*="answer"]:not([class*="related"])',
+                '[class*="content"]', 'article', '[role="article"]'
+            ];
+
+            const candidates = [];
+            const seen = new Set();
+
+            for (const sel of selectors) {
+                try {
+                    const elements = document.querySelectorAll(sel);
+                    for (const el of elements) {
+                        if (seen.has(el)) continue;
+                        seen.add(el);
+                        const score = scoreElement(el);
+                        if (score > 0) candidates.push({ el, score, len: el.innerText?.length || 0 });
+                    }
+                } catch (e) { }
+            }
+
+            // Sort by score (with text length as tiebreaker)
+            candidates.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return b.len - a.len; // Longer content wins ties
+            });
+
+            console.log('[Polling] Smart detection candidates:', candidates.slice(0, 5).map(c => ({
+                score: c.score,
+                len: c.len,
+                class: c.el.className?.slice(0, 50)
+            })));
+
+            if (candidates.length > 0 && candidates[0].score > 30) {
+                const best = candidates[0].el;
                 return {
-                    html: last.innerHTML,
-                    text: last.innerText
+                    html: best.innerHTML,
+                    text: best.innerText,
+                    method: 'smart_detect',
+                    score: candidates[0].score
                 };
             }
-            return { html: '', text: '' };
+
+            return { html: '', text: '', method: 'none' };
         },
         args: [initialCount, providerKey]
     });

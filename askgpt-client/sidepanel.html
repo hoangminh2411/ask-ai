@@ -4,63 +4,148 @@
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="sidepanel.css">
+  <link rel="stylesheet" href="sidepanel-workers.css">
   <script src="marked.min.js"></script>
   <script src="prompts.js"></script>
 </head>
 
-<body class="sp-shell">
+<body class="sp-shell" data-theme="light">
+  <!-- Minimal Header -->
   <header class="sp-header">
     <div class="sp-title">
       <img src="icons/icon-32.png" class="sp-logo" alt="AI Supporter logo">
-      <div>
-        <div class="sp-name">AI Supporter</div>
-        <div class="sp-sub">Assistant Panel</div>
+      <div class="sp-name">AI Supporter</div>
+    </div>
+
+    <div class="sp-header-actions">
+      <!-- Help Button with Hover Popup -->
+      <div class="sp-help-container">
+        <button id="sp-help-btn" class="sp-header-btn" title="Quick Commands Help">?</button>
+        <div class="sp-help-popup" id="sp-help-popup">
+          <div class="sp-help-title">⚡ Quick Commands</div>
+
+          <div class="sp-help-section">
+            <div class="sp-help-label">Workers</div>
+            <div class="sp-help-row">
+              <span class="sp-help-chip" data-insert="@chatgpt">🤖 @chatgpt</span>
+              <span class="sp-help-chip" data-insert="@gemini">✨ @gemini</span>
+            </div>
+            <div class="sp-help-row">
+              <span class="sp-help-chip" data-insert="@perplexity">🔍 @perplexity</span>
+              <span class="sp-help-chip" data-insert="@copilot">🚀 @copilot</span>
+              <span class="sp-help-chip" data-insert="@grok">𝕏 @grok</span>
+            </div>
+          </div>
+
+          <div class="sp-help-section">
+            <div class="sp-help-label">Shortcuts</div>
+            <div class="sp-help-row">
+              <span class="sp-help-chip small" data-insert="@gpt">@gpt</span>
+              <span class="sp-help-chip small" data-insert="@gem">@gem</span>
+              <span class="sp-help-chip small" data-insert="@pplx">@pplx</span>
+              <span class="sp-help-chip small" data-insert="@search">@search</span>
+            </div>
+          </div>
+
+          <div class="sp-help-section">
+            <div class="sp-help-label">Tools</div>
+            <div class="sp-help-row">
+              <span class="sp-help-chip tool" data-insert="/summary">/summary</span>
+              <span class="sp-help-chip tool" data-insert="/analyze">/analyze</span>
+              <span class="sp-help-chip tool" data-insert="/extract">/extract</span>
+            </div>
+          </div>
+
+          <div class="sp-help-section">
+            <div class="sp-help-label">Patterns</div>
+            <div class="sp-help-patterns">
+              <code>@worker msg</code> → Direct
+              <code>@a > @b</code> → Chain
+              <code>@a @b</code> → Parallel
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button id="sp-theme-toggle" class="sp-header-btn" title="Toggle theme">
+        <span class="theme-icon-light">☀️</span>
+        <span class="theme-icon-dark">🌙</span>
+      </button>
+      <button id="sp-more-btn" class="sp-header-btn sp-more-btn" title="More options">⋮</button>
+
+      <!-- More Menu Dropdown -->
+      <div id="sp-more-menu" class="sp-more-menu">
+        <button class="sp-more-option" id="sp-refresh-opt">🔄 Refresh</button>
+        <button class="sp-more-option" id="sp-settings-opt">⚙️ Settings</button>
+        <div class="sp-more-divider"></div>
+        <button class="sp-more-option" id="sp-clear-chat-opt">🗑️ Clear Chat</button>
       </div>
     </div>
-    <div class="sp-actions">
-      <button id="sp-refresh" title="Refresh selection" aria-label="Refresh selection">
-        <img src="icons/panel-refresh.svg" class="sp-icon-img" alt="Refresh">
-      </button>
-      <button id="sp-open-settings" title="Settings" aria-label="Settings">
-        <img src="icons/panel-settings.svg" class="sp-icon-img" alt="Settings">
-      </button>
-    </div>
   </header>
+
+  <!-- Worker Panel Popup (Hidden by default) -->
+  <div class="sp-worker-panel" id="sp-worker-panel">
+    <div class="sp-worker-panel-header">
+      <span>👷 Workers</span>
+      <div class="sp-panel-actions">
+        <button class="sp-panel-refresh" id="sp-worker-panel-refresh" title="Refresh status">🔄</button>
+        <button class="sp-panel-close" id="sp-worker-panel-close">×</button>
+      </div>
+    </div>
+    <div class="sp-worker-list" id="sp-worker-list">
+      <!-- Workers will be populated by JS -->
+    </div>
+  </div>
 
   <div class="sp-main">
     <!-- Welcome Screen (shown when no messages) -->
     <section id="sp-welcome" class="sp-welcome">
       <div class="sp-welcome-icon">✨</div>
-      <div class="sp-welcome-title">How can I help you today?</div>
-      <div class="sp-welcome-hint">Select text on any page, or type a message below</div>
+      <h2 class="sp-welcome-title">AI Supporter</h2>
+      <p class="sp-welcome-desc">Select text on any page, right-click, and choose an AI action.</p>
+      <p class="sp-welcome-hint">Type <code>@</code> to mention a worker, or click <strong>?</strong> for help.</p>
     </section>
 
-    <!-- Chat Messages -->
+    <!-- Answer Container -->
     <section id="sp-answer" class="sp-answer sp-chat"></section>
 
-    <!-- Simple Input Area - Claude Style -->
+    <!-- Input Area -->
     <section class="sp-input-area">
       <div class="sp-input-box">
-        <textarea id="sp-prompt" class="sp-textarea" rows="1" placeholder="Message AI Supporter..."></textarea>
+        <!-- @ Mention Autocomplete -->
+        <div id="sp-mention-popup" class="sp-mention-popup">
+          <div class="sp-mention-header">Select Worker</div>
+          <button class="sp-mention-option" data-worker="chatgpt_web">
+            <span class="sp-mention-icon">🤖</span>
+            <span class="sp-mention-name">ChatGPT</span>
+            <span class="sp-mention-tag">Main</span>
+          </button>
+          <button class="sp-mention-option" data-worker="gemini_web">
+            <span class="sp-mention-icon">✨</span>
+            <span class="sp-mention-name">Gemini</span>
+            <span class="sp-mention-tag">Vision</span>
+          </button>
+          <button class="sp-mention-option" data-worker="perplexity_web">
+            <span class="sp-mention-icon">🔍</span>
+            <span class="sp-mention-name">Perplexity</span>
+            <span class="sp-mention-tag">Search</span>
+          </button>
+          <button class="sp-mention-option" data-worker="copilot_web">
+            <span class="sp-mention-icon">🚀</span>
+            <span class="sp-mention-name">Copilot</span>
+            <span class="sp-mention-tag">Office</span>
+          </button>
+          <button class="sp-mention-option" data-worker="grok_web">
+            <span class="sp-mention-icon">𝕏</span>
+            <span class="sp-mention-name">Grok</span>
+            <span class="sp-mention-tag">Twitter</span>
+          </button>
+        </div>
+        <textarea id="sp-prompt" class="sp-textarea" rows="1"
+          placeholder="Message... or @worker to route directly"></textarea>
         <div class="sp-input-footer">
           <div class="sp-input-left">
-            <!-- Model Selector -->
-            <button id="sp-model-btn" class="sp-selector-btn">
-              <span id="sp-model-name">ChatGPT</span>
-              <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-              </svg>
-            </button>
-            <div id="sp-model-dropdown" class="sp-dropdown">
-              <button class="sp-dropdown-option active" data-provider="chatgpt_web">ChatGPT</button>
-              <button class="sp-dropdown-option" data-provider="gemini_web">Gemini</button>
-              <button class="sp-dropdown-option" data-provider="perplexity_web">Perplexity</button>
-              <button class="sp-dropdown-option" data-provider="copilot_web">Copilot</button>
-              <button class="sp-dropdown-option" data-provider="grok_web">Grok</button>
-            </div>
-
-            <!-- Prompt/Tools Selector -->
+            <!-- Tools Selector -->
             <button id="sp-tools-btn" class="sp-selector-btn">
               <span>⚡ Tools</span>
               <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor">
@@ -80,6 +165,17 @@
               <button class="sp-dropdown-option" data-action="analyze">🔬 Analyze</button>
             </div>
           </div>
+
+          <!-- Worker Avatars (Overlapping Group Chat Style) -->
+          <div class="sp-worker-avatars" id="sp-worker-avatars">
+            <div class="sp-avatar off" data-worker="chatgpt_web" title="ChatGPT (Main)">🤖</div>
+            <div class="sp-avatar off" data-worker="gemini_web" title="Gemini">✨</div>
+            <div class="sp-avatar off" data-worker="perplexity_web" title="Perplexity">🔍</div>
+            <div class="sp-avatar off" data-worker="copilot_web" title="Copilot">🚀</div>
+            <div class="sp-avatar off" data-worker="grok_web" title="Grok">𝕏</div>
+            <button class="sp-avatar-manage" id="sp-open-worker-panel" title="Manage Workers">⚙️</button>
+          </div>
+
           <button id="sp-send" class="sp-send-btn" title="Send">
             <svg viewBox="0 0 24 24" width="18" height="18">
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" fill="none" stroke="currentColor" stroke-width="2"
@@ -92,6 +188,7 @@
     </section>
   </div>
 
+  <script src="sidepanel-workers.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 

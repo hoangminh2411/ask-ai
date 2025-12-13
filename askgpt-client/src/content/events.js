@@ -124,6 +124,32 @@ YÊU CẦU OUTPUT (Markdown):
             sendResponse?.({ selection: content || "" });
             return true;
         }
+        else if (request.action === "extractPageContent") {
+            // Handler for /tool commands - extract page content for AI processing
+            try {
+                const selectors = ['article', 'main', '[role="main"]', '.content', '#content', 'body'];
+                let content = '';
+
+                for (const selector of selectors) {
+                    const el = document.querySelector(selector);
+                    if (el) {
+                        content = el.innerText || el.textContent || '';
+                        if (content.length > 100) break;
+                    }
+                }
+
+                sendResponse?.({
+                    ok: true,
+                    title: document.title,
+                    url: window.location.href,
+                    content: content.trim().slice(0, 20000) // Limit to 20k chars
+                });
+            } catch (e) {
+                console.error('[AskGPT] extractPageContent error:', e);
+                sendResponse?.({ ok: false, error: e.message });
+            }
+            return true;
+        }
         else if (request.action === "CLICK_ELEMENT") {
             const id = request.targetId;
             const target = document.querySelector(`[data-ask-id="${id}"]`);

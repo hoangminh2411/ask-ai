@@ -1,0 +1,1478 @@
+/**
+ * Worker System Styles
+ * ====================
+ * Styles for worker indicators, panel, and theme switching
+ */
+
+/* ============================================
+   CSS CUSTOM PROPERTIES (Theme Variables)
+   ============================================ */
+
+/* Light Theme (Default) */
+[data-theme="light"] {
+    --bg-primary: #f4f6fb;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f9fafb;
+    --bg-hover: #f3f4f6;
+    --bg-active: #eff6ff;
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #6b7280;
+    --text-muted: #9ca3af;
+
+    --border-primary: #e5e7eb;
+    --border-secondary: #d1d5db;
+    --border-focus: #2563eb;
+
+    --accent-primary: #2563eb;
+    --accent-secondary: #1d4ed8;
+    --accent-light: #eff6ff;
+
+    --success: #10b981;
+    --warning: #f59e0b;
+    --error: #ef4444;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+
+    --glass-bg: rgba(255, 255, 255, 0.8);
+    --glass-border: rgba(255, 255, 255, 0.2);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --bg-hover: #334155;
+    --bg-active: #1e3a5f;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    --text-muted: #64748b;
+
+    --border-primary: #334155;
+    --border-secondary: #475569;
+    --border-focus: #3b82f6;
+
+    --accent-primary: #3b82f6;
+    --accent-secondary: #2563eb;
+    --accent-light: #1e3a5f;
+
+    --success: #34d399;
+    --warning: #fbbf24;
+    --error: #f87171;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+
+    --glass-bg: rgba(30, 41, 59, 0.9);
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Apply theme variables to base elements */
+[data-theme="dark"] .sp-shell {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .sp-header {
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .sp-main {
+    background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+}
+
+[data-theme="dark"] .sp-answer.sp-chat {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .sp-input-area {
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .sp-input-box {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+}
+
+[data-theme="dark"] .sp-textarea {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .sp-input-footer {
+    background: var(--bg-tertiary);
+    border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .sp-msg.user .sp-bubble {
+    background: var(--accent-light);
+    border-color: var(--border-secondary);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .sp-msg.bot .sp-bubble {
+    background: var(--bg-tertiary);
+    border-color: var(--border-secondary);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .sp-dropdown {
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
+}
+
+[data-theme="dark"] .sp-dropdown-option {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .sp-dropdown-option:hover {
+    background: var(--bg-hover);
+}
+
+[data-theme="dark"] .sp-dropdown-option.active {
+    background: var(--accent-light);
+    color: var(--accent-primary);
+}
+
+[data-theme="dark"] .sp-welcome {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .sp-welcome-title {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .sp-welcome-desc {
+    color: var(--text-muted);
+}
+
+/* Dark mode: Quick Reference */
+[data-theme="dark"] .sp-quick-ref {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-color: #334155;
+}
+
+[data-theme="dark"] .sp-quick-ref-title {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .sp-quick-ref-label {
+    color: #64748b;
+}
+
+[data-theme="dark"] .sp-quick-chip {
+    background: #1e293b;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .sp-quick-chip:hover {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: #fff;
+}
+
+[data-theme="dark"] .sp-quick-chip.small {
+    background: #334155;
+}
+
+[data-theme="dark"] .sp-quick-chip.tool {
+    background: linear-gradient(135deg, #78350f 0%, #92400e 100%);
+    border-color: #b45309;
+    color: #fde68a;
+}
+
+[data-theme="dark"] .sp-quick-ref-patterns {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .sp-quick-ref-patterns code {
+    background: #312e81;
+    color: #a5b4fc;
+}
+
+/* ============================================
+   THEME TOGGLE BUTTON
+   ============================================ */
+.sp-theme-btn {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-primary);
+    background: var(--bg-tertiary);
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.sp-theme-btn:hover {
+    background: var(--bg-hover);
+    transform: translateY(-1px);
+}
+
+.theme-icon-light,
+.theme-icon-dark {
+    position: absolute;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+/* Light theme: show sun, hide moon */
+[data-theme="light"] .theme-icon-light {
+    opacity: 1;
+    transform: rotate(0deg);
+}
+
+[data-theme="light"] .theme-icon-dark {
+    opacity: 0;
+    transform: rotate(-90deg);
+}
+
+/* Dark theme: show moon, hide sun */
+[data-theme="dark"] .theme-icon-light {
+    opacity: 0;
+    transform: rotate(90deg);
+}
+
+[data-theme="dark"] .theme-icon-dark {
+    opacity: 1;
+    transform: rotate(0deg);
+}
+
+/* ============================================
+   WORKER STATUS INDICATORS (Compact)
+   ============================================ */
+.sp-workers-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+}
+
+.sp-workers-indicator:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-secondary);
+    box-shadow: var(--shadow-sm);
+}
+
+.sp-workers-icons {
+    font-size: 13px;
+    letter-spacing: -2px;
+}
+
+.sp-workers-count {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-tertiary);
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: 8px;
+}
+
+/* Status dot in panel (detailed view) */
+.sp-worker-dot {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    transition: all 0.2s ease;
+}
+
+/* Status indicator ring */
+.sp-worker-dot::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #9ca3af;
+    border: 2px solid var(--bg-tertiary);
+}
+
+.sp-worker-dot.online::after {
+    background: #10b981;
+}
+
+.sp-worker-dot.busy::after {
+    background: #f59e0b;
+    animation: pulse 1.5s infinite;
+}
+
+.sp-worker-dot.connecting::after {
+    background: #3b82f6;
+    animation: pulse 1s infinite;
+}
+
+.sp-worker-dot.error::after {
+    background: #ef4444;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Refreshing animation */
+.sp-workers-indicator.refreshing {
+    animation: indicatorPulse 1s ease infinite;
+}
+
+.sp-workers-indicator.refreshing .sp-worker-dot {
+    animation: dotSpin 0.8s linear infinite;
+}
+
+@keyframes indicatorPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    }
+}
+
+@keyframes dotSpin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Worker loading state */
+.sp-worker-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    color: var(--text-tertiary);
+    font-size: 13px;
+}
+
+.sp-worker-loading .sp-spinner {
+    width: 18px;
+    height: 18px;
+}
+
+/* ============================================
+   WORKER PANEL POPUP (Slack-style)
+   ============================================ */
+.sp-worker-panel {
+    position: absolute;
+    top: 60px;
+    right: 16px;
+    width: 280px;
+    max-height: 400px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-primary);
+    border-radius: 16px;
+    box-shadow: var(--shadow-xl);
+    z-index: 100;
+    overflow: hidden;
+
+    /* Hidden by default */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px) scale(0.95);
+    transition: all 0.2s ease;
+}
+
+.sp-worker-panel.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+[data-theme="dark"] .sp-worker-panel {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+}
+
+.sp-worker-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-primary);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.sp-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sp-panel-refresh,
+.sp-panel-close {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.sp-panel-close {
+    font-size: 20px;
+}
+
+.sp-panel-refresh:hover,
+.sp-panel-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sp-panel-refresh:active {
+    animation: spinOnce 0.5s ease;
+}
+
+@keyframes spinOnce {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.sp-worker-list {
+    padding: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+/* Individual Worker Item */
+.sp-worker-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-bottom: 4px;
+}
+
+.sp-worker-item:hover {
+    background: var(--bg-hover);
+}
+
+.sp-worker-item.main-worker {
+    background: linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+    border: 1px solid var(--accent-primary);
+}
+
+.sp-worker-avatar {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    position: relative;
+}
+
+.sp-worker-avatar::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #9ca3af;
+    border: 2px solid var(--bg-tertiary);
+}
+
+.sp-worker-item.online .sp-worker-avatar::after {
+    background: #10b981;
+}
+
+.sp-worker-item.busy .sp-worker-avatar::after {
+    background: #f59e0b;
+}
+
+.sp-worker-item.offline .sp-worker-avatar::after {
+    background: #9ca3af;
+}
+
+.sp-worker-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sp-worker-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-worker-status {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+}
+
+.sp-worker-status.online {
+    color: var(--success);
+}
+
+.sp-worker-status.busy {
+    color: var(--warning);
+}
+
+.sp-worker-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.sp-worker-tags span {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: var(--bg-hover);
+    border-radius: 4px;
+    color: var(--text-tertiary);
+}
+
+/* Worker Alias */
+.sp-worker-alias {
+    font-size: 11px;
+    color: var(--accent-primary);
+    font-family: 'Monaco', 'Consolas', monospace;
+    margin-top: 2px;
+}
+
+/* Worker Actions (clone/delete buttons) */
+.sp-worker-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sp-worker-clone-btn,
+.sp-worker-delete {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.15s ease;
+}
+
+.sp-worker-clone-btn {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+.sp-worker-clone-btn:hover {
+    background: var(--accent-secondary);
+    transform: scale(1.1);
+}
+
+.sp-worker-delete {
+    background: transparent;
+    color: var(--text-tertiary);
+}
+
+.sp-worker-delete:hover {
+    background: #ef4444;
+    color: #fff;
+}
+
+/* Worker Clone Item (indented) */
+.sp-worker-item.clone {
+    margin-left: 24px;
+    padding-left: 16px;
+    border-left: 2px solid var(--border-primary);
+    background: var(--bg-tertiary);
+}
+
+.sp-worker-item.clone .sp-worker-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+}
+
+.sp-worker-item.clone .sp-worker-name {
+    font-size: 12px;
+}
+
+/* Worker disabled state */
+.sp-worker-item.disabled {
+    opacity: 0.5;
+}
+
+.sp-worker-item.disabled .sp-worker-avatar {
+    filter: grayscale(1);
+}
+
+/* Toggle switch for workers */
+.sp-worker-toggle {
+    position: relative;
+    display: inline-block;
+    width: 32px;
+    height: 18px;
+    margin-right: 4px;
+}
+
+.sp-worker-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.sp-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border-primary);
+    transition: 0.3s;
+    border-radius: 18px;
+}
+
+.sp-toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.sp-worker-toggle input:checked+.sp-toggle-slider {
+    background-color: var(--accent-primary);
+}
+
+.sp-worker-toggle input:checked+.sp-toggle-slider::before {
+    transform: translateX(14px);
+}
+
+/* Badge styles */
+.sp-badge,
+.sp-main-badge,
+.sp-opt-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sp-badge,
+.sp-main-badge {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.sp-opt-badge.main {
+    background: var(--accent-primary);
+    color: white;
+}
+
+/* Worker Toggle Switch */
+.sp-worker-toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+}
+
+.sp-worker-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.sp-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-tertiary);
+    border-radius: 11px;
+    transition: all 0.2s ease;
+}
+
+.sp-toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.sp-worker-toggle input:checked+.sp-toggle-slider {
+    background: var(--accent-primary);
+}
+
+.sp-worker-toggle input:checked+.sp-toggle-slider::before {
+    transform: translateX(18px);
+}
+
+.sp-worker-toggle input:disabled+.sp-toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   WORKER SELECTOR (Input Footer)
+   ============================================ */
+.sp-worker-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sp-worker-icon {
+    font-size: 14px;
+}
+
+.sp-worker-dropdown {
+    min-width: 220px;
+}
+
+.sp-worker-dropdown .sp-dropdown-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+}
+
+.sp-opt-icon {
+    font-size: 14px;
+    width: 20px;
+    text-align: center;
+}
+
+.sp-opt-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.sp-opt-tags {
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bg-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* ============================================
+   COLLABORATION INDICATOR (In Chat)
+   ============================================ */
+.sp-collab-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: linear-gradient(135deg, var(--accent-light) 0%, transparent 100%);
+    border: 1px solid var(--accent-primary);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent-primary);
+    margin: 12px 0;
+    animation: fadeInSlide 0.3s ease;
+}
+
+.sp-collab-indicator .sp-collab-arrow {
+    color: var(--text-muted);
+    animation: arrowPulse 1.5s ease infinite;
+}
+
+@keyframes fadeInSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes arrowPulse {
+
+    0%,
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    50% {
+        transform: translateX(3px);
+        opacity: 0.7;
+    }
+}
+
+/* Original response section */
+.sp-original-response {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--border-primary);
+    opacity: 0.9;
+}
+
+/* Delegated response section */
+.sp-delegated-response {
+    animation: fadeInSlide 0.4s ease 0.2s both;
+}
+
+.sp-delegated-response::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-primary), transparent);
+    border-radius: 2px;
+    margin-bottom: 12px;
+}
+
+/* Delegation progress indicator */
+.sp-delegation-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+    margin: 8px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.sp-delegation-progress .sp-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-primary);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Worker badge in messages */
+.sp-worker-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--bg-hover);
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+}
+
+.sp-worker-label.main {
+    background: var(--accent-light);
+    color: var(--accent-primary);
+}
+
+.sp-worker-label .worker-name {
+    font-weight: 700;
+}
+
+/* ============================================
+   WORKER AVATARS (Group Chat Style)
+   ============================================ */
+.sp-worker-avatars {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    margin-right: 8px;
+}
+
+.sp-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--bg-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    margin-left: -8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.sp-avatar:first-child {
+    margin-left: 0;
+}
+
+.sp-avatar:hover {
+    transform: translateY(-3px) scale(1.1);
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Manage Workers Button (⚙️) */
+.sp-avatar-manage {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    background: var(--bg-tertiary);
+    border: 2px dashed var(--border-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 4px;
+    opacity: 0.7;
+}
+
+.sp-avatar-manage:hover {
+    opacity: 1;
+    background: var(--accent-light);
+    border-color: var(--accent-primary);
+    transform: rotate(90deg);
+}
+
+/* OFF state - grayscale & dim */
+.sp-avatar.off {
+    filter: grayscale(1);
+    opacity: 0.5;
+}
+
+.sp-avatar.off:hover {
+    filter: grayscale(0);
+    opacity: 1;
+}
+
+/* ON state - full color with glow */
+.sp-avatar.on {
+    filter: none;
+    opacity: 1;
+    box-shadow: 0 0 0 2px var(--accent-primary), 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.sp-avatar.on::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    border: 2px solid var(--bg-primary);
+}
+
+/* Busy state - pulsing */
+.sp-avatar.busy {
+    filter: none;
+    opacity: 1;
+}
+
+.sp-avatar.busy::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: #f59e0b;
+    border-radius: 50%;
+    border: 2px solid var(--bg-primary);
+    animation: pulse 1.5s infinite;
+}
+
+/* Worker count badge (shows when there are hidden workers) */
+.sp-avatar-more {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* ============================================
+   DARK THEME FOR AVATARS
+   ============================================ */
+[data-theme="dark"] .sp-avatar {
+    border-color: var(--bg-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .sp-avatar.on {
+    box-shadow: 0 0 0 2px var(--accent-primary), 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+@media (max-width: 400px) {
+    .sp-workers-indicator {
+        padding: 4px 8px;
+    }
+
+    .sp-worker-dot {
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+    }
+
+    .sp-workers-count {
+        display: none;
+    }
+
+    .sp-worker-panel {
+        width: calc(100% - 32px);
+        right: 16px;
+        left: 16px;
+    }
+
+    .sp-collab-indicator {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .sp-avatar {
+        width: 24px;
+        height: 24px;
+        font-size: 11px;
+        margin-left: -6px;
+    }
+}
+
+/* ============================================
+   @ MENTION POPUP
+   ============================================ */
+.sp-mention-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: 12px;
+    box-shadow: var(--shadow-xl);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.15s ease;
+    z-index: 100;
+    overflow: hidden;
+}
+
+.sp-mention-popup.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.sp-mention-header {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-primary);
+    background: var(--bg-secondary);
+}
+
+.sp-mention-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s ease;
+}
+
+.sp-mention-option:hover,
+.sp-mention-option.active {
+    background: var(--bg-hover);
+}
+
+.sp-mention-option.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sp-mention-icon {
+    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    border-radius: 50%;
+}
+
+.sp-mention-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.sp-mention-alias {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    font-family: monospace;
+}
+
+.sp-mention-tag {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    background: var(--bg-tertiary);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.sp-mention-option:hover .sp-mention-tag,
+.sp-mention-option.active .sp-mention-tag {
+    background: var(--accent-primary);
+    color: white;
+}
+
+/* Worker off indicator */
+.sp-mention-option .sp-mention-status {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #9ca3af;
+}
+
+.sp-mention-option.enabled .sp-mention-status {
+    background: #10b981;
+}
+
+/* ============================================
+   TASK PREVIEW (Independent Tasks)
+   ============================================ */
+.sp-task-preview {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-style: italic;
+    margin-left: 8px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================
+   ENHANCED BUSY INDICATOR
+   ============================================ */
+.sp-avatar.busy {
+    animation: busyPulse 2s ease infinite;
+}
+
+@keyframes busyPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 2px #f59e0b, 0 0 8px rgba(245, 158, 11, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 0 3px #f59e0b, 0 0 16px rgba(245, 158, 11, 0.6);
+    }
+}
+
+/* Spinning loader on busy avatar */
+.sp-avatar.busy::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border: 2px solid transparent;
+    border-top-color: #f59e0b;
+    border-radius: 50%;
+    animation: spinBorder 1s linear infinite;
+}
+
+@keyframes spinBorder {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Worker panel busy status with task info */
+.sp-worker-item.busy .sp-worker-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sp-worker-item.busy .sp-worker-status::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f59e0b;
+    animation: pulse 1s infinite;
+}
+
+/* ============================================
+   HELP POPUP
+   ============================================ */
+
+.sp-help-container {
+    position: relative;
+}
+
+.sp-help-popup {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    width: 280px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e2e8f0;
+    padding: 14px;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-8px);
+    transition: all 0.2s ease;
+}
+
+.sp-help-container:hover .sp-help-popup,
+.sp-help-popup:hover {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+.sp-help-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.sp-help-section {
+    margin-bottom: 10px;
+}
+
+.sp-help-section:last-child {
+    margin-bottom: 0;
+}
+
+.sp-help-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.sp-help-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.sp-help-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 8px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sp-help-chip:hover {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: #fff;
+    transform: scale(1.02);
+}
+
+.sp-help-chip.small {
+    padding: 2px 6px;
+    font-size: 9px;
+    background: #f8fafc;
+}
+
+.sp-help-chip.tool {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-color: #fbbf24;
+    color: #92400e;
+}
+
+.sp-help-chip.tool:hover {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    border-color: #f59e0b;
+    color: #fff;
+}
+
+.sp-help-patterns {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    color: #64748b;
+}
+
+.sp-help-patterns code {
+    display: inline-block;
+    padding: 1px 5px;
+    background: #e0e7ff;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 9px;
+    color: #4f46e5;
+    margin-right: 4px;
+}
+
+/* Dark mode: Help Popup */
+[data-theme="dark"] .sp-help-popup {
+    background: #1e293b;
+    border-color: #334155;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .sp-help-title {
+    color: #f1f5f9;
+    border-color: #475569;
+}
+
+[data-theme="dark"] .sp-help-label {
+    color: #64748b;
+}
+
+[data-theme="dark"] .sp-help-chip {
+    background: #334155;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .sp-help-chip:hover {
+    background: #6366f1;
+    border-color: #6366f1;
+}
+
+[data-theme="dark"] .sp-help-chip.small {
+    background: #1e293b;
+}
+
+[data-theme="dark"] .sp-help-chip.tool {
+    background: linear-gradient(135deg, #78350f 0%, #92400e 100%);
+    border-color: #b45309;
+    color: #fde68a;
+}
+
+[data-theme="dark"] .sp-help-patterns {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .sp-help-patterns code {
+    background: #312e81;
+    color: #a5b4fc;
+}

@@ -9,8 +9,11 @@ const promptWrapper = document.querySelector('.sp-quick-wrapper');
 const promptFilter = document.getElementById('sp-prompt-filter');
 const activePromptLabel = document.getElementById('sp-active-prompt');
 
-
-
+// Clear old provider storage (deprecated) 
+// Note: workerEnabledStates is NOT cleared so workers persist their on/off state
+chrome.storage.sync.remove(['provider', 'ai_provider'], () => {
+  console.log('[Sidepanel] Cleared old provider settings');
+});
 
 let promptOptions = [];
 let promptCursor = -1;
@@ -40,6 +43,7 @@ function escapeHtml(text) {
 
 function appendUserMessage(text, promptLabel = "") {
   if (!text && !promptLabel) return;
+  hideWelcomeScreen(); // Hide welcome when user sends message
   const msg = document.createElement('div');
   msg.className = 'sp-msg user';
   const parts = [];
@@ -51,9 +55,18 @@ function appendUserMessage(text, promptLabel = "") {
 }
 
 
+// Helper: Hide static welcome screen when chat starts
+function hideWelcomeScreen() {
+  const welcomeEl = document.getElementById('sp-welcome');
+  if (welcomeEl) {
+    welcomeEl.style.display = 'none';
+  }
+}
+
 // Hàm Render và Gắn sự kiện trực tiếp
-function appendBotMessage(text) {
+function appendBotMessage(text, worker = null, meta = null) {
   removeTyping();
+  hideWelcomeScreen(); // Hide welcome when showing bot message
 
   try {
     const msg = document.createElement('div');
@@ -62,6 +75,21 @@ function appendBotMessage(text) {
     const bubble = document.createElement('div');
     bubble.className = 'sp-bubble';
     bubble.style.position = 'relative'; // Support absolute icon
+
+    // === WORKER IDENTITY HEADER ===
+    if (worker && worker.id) {
+      const workerHeader = document.createElement('div');
+      workerHeader.className = 'sp-worker-header';
+      workerHeader.innerHTML = `
+        <span class="sp-worker-badge" style="--worker-color: ${worker.color || '#6b7280'}">
+          <span class="sp-worker-badge-icon">${worker.icon || '🤖'}</span>
+          <span class="sp-worker-badge-name">${escapeHtml(worker.name || worker.id)}</span>
+        </span>
+        ${meta?.responseTime ? `<span class="sp-response-time">${(meta.responseTime / 1000).toFixed(1)}s</span>` : ''}
+        ${meta?.delegatedFrom ? `<span class="sp-delegated-badge">via ${meta.delegatedFrom}</span>` : ''}
+      `;
+      bubble.appendChild(workerHeader);
+    }
 
     // 1. Clean and normalize response text
     let finalHtml = text || "";
@@ -89,16 +117,21 @@ function appendBotMessage(text) {
       return match;
     });
 
-    bubble.innerHTML = finalHtml;
+    // Create content container (separate from header)
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'sp-bubble-content';
+    contentDiv.innerHTML = finalHtml;
+    bubble.appendChild(contentDiv);
 
-    // TTS Feature (Read Aloud) - positioned at top right
+
+    // TTS Feature (Read Aloud) - positioned at top right of content area
     const ttsBtn = document.createElement('button');
     ttsBtn.className = 'sp-tts-btn';
     ttsBtn.innerHTML = '🔊';
     ttsBtn.title = "Read aloud";
     ttsBtn.style.cssText = `
         position: absolute;
-        top: 6px;
+        top: ${worker && worker.id ? '38px' : '6px'};
         right: 6px;
         background: #f3f4f6;
         border: none;
@@ -127,8 +160,8 @@ function appendBotMessage(text) {
         isSpeaking = false;
       } else {
         window.speechSynthesis.cancel();
-        // Lấy text thuần, loại bỏ các ký tự thừa
-        const rawText = bubble.innerText.replace(/🔊|⏹️/g, '').trim();
+        // Get text only from content area, not header
+        const rawText = contentDiv.innerText.replace(/🔊|⏹️/g, '').trim();
         const utterance = new SpeechSynthesisUtterance(rawText);
         // Auto-detect lang based on text? Default to VN/EN mix
         // utterance.lang = 'vi-VN'; 
@@ -146,8 +179,8 @@ function appendBotMessage(text) {
     };
     bubble.appendChild(ttsBtn);
 
-    // 2. Tìm thẻ <a> và biến thành <button>
-    const links = bubble.querySelectorAll('a');
+    // 2. Tìm thẻ <a> và biến thành <button> (within content only)
+    const links = contentDiv.querySelectorAll('a');
 
     links.forEach(link => {
       const content = link.textContent.trim();
@@ -244,8 +277,8 @@ function appendBotMessage(text) {
       }
     });
 
-    // 3. Tìm các câu hỏi gợi ý (Discovery Questions) và biến thành nút bấm
-    const listItems = bubble.querySelectorAll('li');
+    // 3. Tìm các câu hỏi gợi ý (Discovery Questions) và biến thành nút bấm (within content only)
+    const listItems = contentDiv.querySelectorAll('li');
     listItems.forEach(li => {
       const text = li.textContent.trim();
       // Check if it looks like a question from our prompt (starts with quote)
@@ -355,10 +388,22 @@ function sendFinalQuery(finalQuery, selectionText, promptLabel = "Prompt") {
 
 function sendPrompt(prefix, label) {
   const userText = promptEl.value.trim();
-  const selectedPrompt = promptRegistry.find(p => p.id === activePromptId) || promptRegistry.find(p => p.surfaces?.includes('panel'));
-  activePrompt = prefix || selectedPrompt?.text || activePrompt || "";
-  const promptLabel = label || selectedPrompt?.label || document.querySelector('.sp-chip.active')?.getAttribute('data-label') || (prefix ? "Prompt" : "User");
+  const selectedPrompt = promptRegistry.find(p => p.id === activePromptId);
+
+  // Only use prompt template if user explicitly selected it (not just from registry)
+  // If user just types text directly, send it raw without prompt wrapper
+  const shouldUsePrompt = prefix || (activePromptId && selectedPrompt);
+
+  if (shouldUsePrompt) {
+    activePrompt = prefix || selectedPrompt?.text || "";
+  } else {
+    activePrompt = "";
+  }
+
+  const promptLabel = label || selectedPrompt?.label || (prefix ? "Prompt" : "Chat");
   updateActivePromptLabel(promptLabel);
+
+  // Build the query - only wrap with prompt template if explicitly using a prompt
   const combined = activePrompt
     ? `${activePrompt}\n\nContext:\n"${userText || currentSelection || ""}"`
     : (userText || currentSelection);
@@ -547,8 +592,30 @@ function renderWelcomeScreen() {
   answerEl.appendChild(container);
 }
 
-document.getElementById('sp-open-settings').onclick = () => chrome.runtime.openOptionsPage();
-document.getElementById('sp-refresh').onclick = refreshSelection;
+// Settings and Refresh - now in More menu with new IDs
+const settingsBtn = document.getElementById('sp-settings-opt') || document.getElementById('sp-open-settings');
+if (settingsBtn) {
+  settingsBtn.onclick = () => chrome.runtime.openOptionsPage();
+}
+
+const refreshBtn = document.getElementById('sp-refresh-opt') || document.getElementById('sp-refresh');
+if (refreshBtn) {
+  refreshBtn.onclick = refreshSelection;
+}
+
+const clearChatBtn = document.getElementById('sp-clear-chat-opt');
+if (clearChatBtn) {
+  clearChatBtn.onclick = () => {
+    const answerEl = document.getElementById('sp-answer');
+    if (answerEl) {
+      answerEl.innerHTML = '';
+    }
+    const welcomeEl = document.getElementById('sp-welcome');
+    if (welcomeEl) {
+      welcomeEl.style.display = 'flex';
+    }
+  };
+}
 function renderPromptChips(filterText = "") {
   const bar = promptMenu;
   if (!bar) return;
@@ -614,10 +681,19 @@ sendBtn.onclick = () => sendPrompt();
 
 function handlePortMessage(msg) {
   if (msg.status === 'progress') {
-    showTyping(msg.message || "AI is thinking...");
+    // Show worker info in typing indicator if available
+    const progressMsg = msg.worker
+      ? `${msg.worker.icon} ${msg.worker.name} is thinking...`
+      : (msg.message || "AI is thinking...");
+    showTyping(progressMsg);
+  } else if (msg.status === 'delegation') {
+    // Worker delegation is happening
+    showDelegationIndicator(msg.from, msg.to, msg.reason);
   } else if (msg.status === 'success') {
     setStatus("");
-    appendBotMessage(msg.answer);
+    removeDelegationIndicator(); // Clean up delegation UI
+    // Pass worker info to appendBotMessage for display
+    appendBotMessage(msg.answer, msg.worker, msg.meta);
     sendBtn.disabled = false;
 
     // CACHING SAVE (Only for summary)
@@ -633,9 +709,41 @@ function handlePortMessage(msg) {
 
   } else if (msg.status === 'error') {
     removeTyping();
+    removeDelegationIndicator(); // Clean up delegation UI
     appendBotMessage("Error: " + (msg.error || "Unexpected issue."));
     sendBtn.disabled = false;
   }
+}
+
+/**
+ * Show delegation indicator in chat
+ */
+function showDelegationIndicator(fromWorker, toWorker, reason) {
+  removeTyping();
+  removeDelegationIndicator(); // Remove any existing
+
+  const indicator = document.createElement('div');
+  indicator.className = 'sp-delegation-progress';
+  indicator.id = 'sp-delegation-indicator';
+  indicator.innerHTML = `
+    <div class="sp-spinner"></div>
+    <span>
+      ${fromWorker.icon} ${fromWorker.name} 
+      <span style="color: var(--text-muted);">→</span> 
+      ${toWorker.icon} ${toWorker.name}
+    </span>
+  `;
+
+  answerEl.appendChild(indicator);
+  scrollToBottom();
+}
+
+/**
+ * Remove delegation indicator
+ */
+function removeDelegationIndicator() {
+  const existing = document.getElementById('sp-delegation-indicator');
+  if (existing) existing.remove();
 }
 ensurePort();
 
@@ -1121,54 +1229,58 @@ function renderLensResults(payload) {
 }
 
 // ============================================
-// MODEL SELECTOR
+// WORKER SELECTOR (Legacy - replaced by Avatar system)
 // ============================================
-(function initModelSelector() {
-  const btn = document.getElementById('sp-model-btn');
-  const dropdown = document.getElementById('sp-model-dropdown');
-  const nameEl = document.getElementById('sp-model-name');
+(function initWorkerSelector() {
+  const btn = document.getElementById('sp-worker-btn');
+  const dropdown = document.getElementById('sp-worker-dropdown');
+  const nameEl = document.getElementById('sp-worker-name');
+  const iconEl = btn?.querySelector('.sp-worker-icon');
+  const badgeEl = btn?.querySelector('.sp-main-badge');
 
-  if (!btn || !dropdown) return;
+  // Early return if elements don't exist (new HTML doesn't have these)
+  if (!btn || !dropdown) {
+    console.log('[Sidepanel] Worker dropdown not found, using avatar system');
+    return;
+  }
 
-  const PROVIDERS = {
-    'chatgpt_web': 'ChatGPT',
-    'gemini_web': 'Gemini',
-    'perplexity_web': 'Perplexity',
-    'copilot_web': 'Copilot',
-    'grok_web': 'Grok'
+  const WORKERS = {
+    'chatgpt_web': { name: 'ChatGPT', icon: '🤖', isMain: true },
+    'gemini_web': { name: 'Gemini', icon: '✨', isMain: false },
+    'perplexity_web': { name: 'Perplexity', icon: '🔍', isMain: false },
+    'copilot_web': { name: 'Copilot', icon: '🚀', isMain: false },
+    'grok_web': { name: 'Grok', icon: '𝕏', isMain: false }
   };
 
-  chrome.storage.sync.get('ai_provider', (result) => {
-    const current = result.ai_provider || 'chatgpt_web';
-    updateUI(current);
-  });
+  // Always default to ChatGPT - no more storage loading
+  updateUI('chatgpt_web');
 
-  function updateUI(providerId) {
-    const name = PROVIDERS[providerId] || PROVIDERS['chatgpt_web'];
-    if (nameEl) nameEl.textContent = name;
+  function updateUI(workerId) {
+    const worker = WORKERS[workerId] || WORKERS['chatgpt_web'];
+    if (nameEl) nameEl.textContent = worker.name;
+    if (iconEl) iconEl.textContent = worker.icon;
+    if (badgeEl) badgeEl.style.display = worker.isMain ? 'inline' : 'none';
+
     dropdown.querySelectorAll('.sp-dropdown-option').forEach(opt => {
-      opt.classList.toggle('active', opt.dataset.provider === providerId);
+      opt.classList.toggle('active', opt.dataset.worker === workerId);
     });
   }
 
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllDropdowns();
-    dropdown.classList.toggle('open');
-  });
-
-  dropdown.addEventListener('click', (e) => {
-    const option = e.target.closest('.sp-dropdown-option');
-    if (!option) return;
-    const providerId = option.dataset.provider;
-    chrome.storage.sync.set({ ai_provider: providerId }, () => {
-      updateUI(providerId);
-      dropdown.classList.remove('open');
-      chrome.runtime.sendMessage({ action: 'config_updated' });
-      setStatus(`Switched to ${PROVIDERS[providerId]}`);
-      setTimeout(() => setStatus(''), 2000);
+  // NOTE: Old worker dropdown has been replaced by avatar system
+  // This code is kept for backward compatibility but dropdown is hidden in new HTML
+  if (btn && dropdown) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllDropdowns();
+      dropdown.classList.toggle('open');
     });
-  });
+
+    dropdown.addEventListener('click', (e) => {
+      const option = e.target.closest('.sp-dropdown-option');
+      if (!option) return;
+      dropdown.classList.remove('open');
+    });
+  }
 })();
 
 // ============================================

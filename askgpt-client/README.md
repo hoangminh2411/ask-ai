@@ -1,7 +1,220 @@
-# AskGPT - Multi-Provider AI Assistant Browser Extension
+# AskGPT — Multi-Provider AI Assistant Browser Extension (v3.0)
 
-**A lightweight, powerful browser extension that brings AI assistance directly to your workflow.** Select text anywhere on the web and get instant help with writing, translation, summarization, image analysis, and more.
+A lightweight, modular AI assistant built directly into your browser. Select text on any page to get explanations, rewrites, translations, TL;DR, image analysis with Google Lens, and chat in a side panel.
 
+---
+
+## Overview
+
+AskGPT integrates multiple AI providers: ChatGPT, Google Gemini (Web & API), Perplexity, Microsoft Copilot, and Grok. Interact via a floating selection toolbar, the side panel chat, or keyboard shortcuts—without leaving the page.
+
+New in v3.0: Worker Orchestrator, Bridge-based automation, parallel smart mentions, and pipelines.
+
+Version: 3.0 · Modular architecture · No server-side data storage
+
+---
+
+## Key Features
+
+- Floating toolbar on text selection: Explain, Rewrite, Translate, TL;DR, open side panel
+- Side panel chat: `/` prompt picker, keyboard navigation, Enter to send, Shift+Enter for newline, Markdown rendering
+- Multi-provider support: ChatGPT Web, Gemini Web, Gemini API, Perplexity, Copilot, Grok
+- Google Lens: capture screen region, find Similar images or Explain; grid of images and textual cues
+- Image search: Pinterest (primary), Unsplash/Picsum (fallback), deduping, open image in new tab
+- Shared prompt registry `prompts.js`: used by toolbar and panel; easy to extend
+- Shortcuts: Alt+S (summarize page), Alt+A (capture image), `/` (open prompt menu), Enter/Shift+Enter (send/newline), Arrow keys (navigate)
+
+### Worker Orchestrator & Smart Mentions
+- Enable workers (Main/Specialists) via avatars in side panel
+- Use `@chatgpt`, `@gemini`, `@perplexity`, `@copilot`, `@grok` to target providers
+- Run tasks in parallel or sequences: `/summary @chatgpt > @gemini`
+- Automatic busy-worker fallback to available workers
+
+---
+
+## Installation
+
+### Chrome/Chromium/Edge (Developer mode)
+1. Open `chrome://extensions/` (or `edge://extensions/`)
+2. Enable Developer mode
+3. Click Load unpacked → select the `askgpt-client` folder
+
+### Firefox (Temporary)
+1. Open `about:debugging#/runtime/this-firefox`
+2. Load Temporary Add-on → pick `manifest.json` inside `askgpt-client`
+
+---
+
+## Configuration
+
+- Open popup → Settings or go via `chrome://extensions/` → Details → Options
+- Choose provider:
+  - ChatGPT Web: uses your logged-in account
+  - Gemini Web: uses your logged-in Google account
+  - Gemini API: enter your Google Generative AI API key
+  - Perplexity / Copilot / Grok: uses your logged-in web account
+- Click Save to apply
+
+---
+
+## Quick Usage
+
+### Basic Flow
+1. Select text on a page → floating toolbar appears
+2. Pick a quick action or press Panel to open side panel
+3. See responses in the side panel (Markdown, status updates)
+
+### Side Panel
+- Press `/` to open prompt menu, type to filter, use arrows to navigate, Enter to choose
+- Composition: Enter to send; Shift+Enter for newline
+- Prompt label shows the active command
+
+### Image Capture & Lens
+1. Press Alt+A or choose capture
+2. Draw a region; Lens analyzes automatically
+3. Choose Similar (image grid + sources) or Explain (visual explanation)
+
+### Page Summarization
+- Press Alt+S → extension extracts main content, sends to AI for summary → displays in side panel
+
+### Image Search
+- Use “Find Images”, enter keyword → 12-image grid → click to open in new tab; quick link to Pinterest
+
+---
+
+## Project Structure
+
+```
+askgpt-client/
+├─ manifest.json              # Extension config & permissions
+├─ background.js              # Service worker entry (importScripts)
+├─ content.js                 # Content script entry
+├─ popup.html/js              # Popup UI
+├─ options.html/js            # Settings page
+├─ sidepanel.html/css/js      # Side panel UI & logic
+├─ prompts.js                 # Shared prompt registry
+├─ content.css                # Content styles
+├─ marked.min.js              # Markdown renderer
+│
+├─ src/background/            # Background modules
+│  ├─ constants.js            # Constants & provider configs
+│  ├─ worker-configs.js       # Worker definitions & capabilities
+│  ├─ worker-manager.js       # Worker state & status management
+│  ├─ worker-orchestrator.js  # Collaboration & delegation between workers
+│  ├─ worker-status-checker.js# Real-time status monitoring
+│  ├─ element-detector.js     # Self-learning UI element detection
+│  ├─ controller.js           # Main controller & routing
+│  ├─ api.gemini.js           # Gemini API calls
+│  ├─ sender.js               # Chrome Debugger text injection
+│  ├─ window-manager.js       # Provider window/tab management
+│  ├─ window-bridge.js        # Bridge for provider window communication
+│  ├─ message-state.js        # Message counting & status
+│  ├─ polling.js              # Response polling
+│  ├─ debugger.js             # Chrome debugger utilities
+│  ├─ lens.js                 # Google Lens integration
+│  ├─ sidepanel.js            # Side panel message handling
+│  └─ menus-shortcuts.js      # Context menu & keyboard shortcuts
+│
+├─ src/content/               # Content scripts
+│  ├─ state.js                # Shared state
+│  ├─ extract.js              # Page content extraction
+│  ├─ layout.js               # Layout adjustments
+│  ├─ modal.js                # In-page modal
+│  ├─ chat-client.js          # Side panel chat control
+│  ├─ floating-button.js      # Selection floating toolbar
+│  ├─ events.js               # DOM & runtime events
+│  ├─ sidepanel-launcher.js   # Trigger side panel
+│  ├─ image-capture.js        # Screenshot capture
+│  ├─ chatgpt-observer.js     # Observe ChatGPT completion
+│  └─ rewrite-plugin.js       # Context rewrite menu
+│
+└─ icons/                     # Extension & prompt icons
+```
+
+---
+
+## Architecture & Data Flow
+
+- Entry points `background.js` and `content.js` load modules via `importScripts()`
+- Namespaces: background uses `self.ASKGPT_BG`, content uses `window.ASKGPT_CONTENT`
+- Bridge system for reliable automation in provider windows (`window-bridge.js`)
+- Worker Orchestrator enables parallel tasks and pipelines with smart mentions
+
+1) User selects text / clicks → content detects
+2) Send message to background via port `ask-gpt-port`
+3) Background picks provider (web/API), opens/remembers popup, injects content
+4) Polling/observers wait for stable response → return HTML/Markdown
+5) Side panel updates UI, state, images/lens if present
+
+---
+
+## Development & Extensibility
+
+### Add a Prompt
+
+Edit `prompts.js`:
+
+```javascript
+{
+  id: "my-prompt",
+  label: "My Action",
+  icon: "icons/prompt-myaction.svg",
+  surfaces: ["toolbar", "panel"],
+  text: "System instruction…",
+  description: "Short description for search"
+}
+```
+
+Add an icon to `icons/`; reload the extension.
+
+### Add a Provider
+- Update `controller.js` to route by `provider`
+- Add host permissions to `manifest.json`
+- Update `options.html/js` to expose provider selection
+
+### Customize
+- Shortcuts & context menus: `src/background/menus-shortcuts.js`
+- Image sources/proxy: background side panel handlers
+- Styles: `sidepanel.css`, `content.css`
+
+---
+
+## Troubleshooting
+
+- Floating toolbar not showing: reload extension; check Console; verify host permissions
+- Side panel not opening: check Service Worker (Chrome → Extensions → Errors); reload
+- "AI is typing…" stuck:
+  - ChatGPT/Gemini Web: ensure logged in; provider popup visible; may need reload
+  - Gemini API: check API key, network, rate limits
+- Empty image search: wait a few seconds, try different keywords, check CORS/VPN
+- Settings not saved: ensure you click Save; if issues, remove & reinstall
+
+---
+
+## Privacy
+
+- No custom server; all operations run locally in your browser
+- No tracking/telemetry; provider APIs called only when needed
+- Settings stored in `chrome.storage.sync` (encrypted by browser)
+- API keys used only for direct provider calls; no external logging
+
+---
+
+## Contributing
+
+- Bug reports: include Console/Extensions Errors logs
+- Suggestions: describe use-cases clearly; PRs welcome for docs/prompts
+
+---
+
+## Credits
+
+Google Lens, Google Gemini, OpenAI ChatGPT, Perplexity, Microsoft Copilot, Grok (X.AI), Marked.js
+
+---
+
+## Support
+If you encounter issues, see Troubleshooting and check permissions/Console. Open an issue with details for help.
 ---
 
 ## 🎯 Overview
@@ -10,7 +223,6 @@ AskGPT is a modular browser extension that integrates ChatGPT, Google Gemini, Pe
 
 **Version:** 3.0 | **Multi-Provider Support** (ChatGPT, Gemini, Perplexity, Copilot, Grok)
 
----
 
 ## ✨ Key Features
 
@@ -25,54 +237,30 @@ AskGPT is a modular browser extension that integrates ChatGPT, Google Gemini, Pe
 - **Smart prompt picker**: Press `/` to search and select prompts by keyword
 - **Keyboard navigation**: Arrow keys to browse, Enter to select
 - **Clean composition**: Shift+Enter for newlines, Enter to send
-- Active prompt display shows which AI behavior is active
 - Markdown rendering for formatted responses
 
-### 3. **Multi-Provider Support**
-- **ChatGPT (Web)**: Automated browser control via debugger API
-- **Google Gemini (Web)**: Full Gemini web interface integration
-- **Google Gemini (API)**: Direct API mode for faster, private responses
 - **Perplexity AI**: Real-time web search and reasoning
 - **Microsoft Copilot**: Enterprise-grade AI assistance
-- **Grok (X.AI)**: Advanced reasoning and analysis
-- Easy provider switching in extension settings
-
 ### 4. **Google Lens Image Analysis**
-- Capture screenshots and analyze with Google Lens
 - Two modes:
   - **Similar**: Find visually similar images with source attribution
   - **Explain**: Get detailed descriptions based on visual matches
-- Integrated directly into the side panel workflow
-
-### 5. **Image Search**
 - Find images directly within the extension
 - Multiple sources: Pinterest (primary), Unsplash, Picsum (fallback)
-- Duplicate prevention and smart caching
-- 12-image grid display with click-to-open in new tab
 - Source attribution and Pinterest search links
-
 ### 6. **Shared Prompt Registry**
 - Unified prompt system used across all UI surfaces
 - Easily extensible with custom prompts
-- Each prompt includes: ID, label, description, icon, text, and target surfaces
-- Includes: Explain, Rewrite, Translate (VN/EN), TL;DR, Action Plan, and more
-
-### 7. **Keyboard Shortcuts**
 - **Alt+S**: Summarize the current page
-- **Alt+A**: Capture screenshot for AI analysis
 - **/** (in side panel): Open prompt menu
 - **Enter**: Send message (Shift+Enter for newline)
 - **Arrow Keys**: Navigate prompts
 
----
-
-## 📦 Installation
 
 ### Chrome / Chromium / Edge (Developer Mode)
 
 1. Clone or download this repository
 2. Open `chrome://extensions/` (or edge://extensions/)
-3. Enable **Developer mode** (toggle in top-right corner)
 4. Click **"Load unpacked"**
 5. Select the `askgpt-client` folder
 6. Extension appears in your toolbar

@@ -106,30 +106,37 @@ const PROVIDER_CONFIGS = {
     },
     perplexity_web: {
         selectors: {
-            // Perplexity uses textarea with specific classes
-            input: 'textarea[placeholder], textarea.resize-none',
-            // Send button is usually the last button near textarea or has specific SVG
-            sendButton: 'button[aria-label*="send" i], button[aria-label*="submit" i], form button:last-of-type, button svg[class*="send"]',
-            response: '[class*="prose"], [class*="markdown"], .font-sans.text-base'
+            // Perplexity uses various input types - try multiple
+            input: 'textarea, [contenteditable="true"], input[type="text"], [role="textbox"]',
+            // Send button - multiple patterns
+            sendButton: 'button[aria-label*="send" i], button[aria-label*="submit" i], button[aria-label*="ask" i], form button:last-of-type',
+            // Stop button for streaming detection
+            stopButton: 'button[aria-label*="stop" i], button[aria-label*="cancel" i]',
+            // Response containers - Perplexity uses prose classes
+            response: '[class*="prose"], .markdown-content, [class*="response"], article, .font-sans.text-base, [class*="answer"]'
         },
         checks: {
             isReady: (doc) => {
-                const input = doc.querySelector('textarea');
+                // Try multiple input types
+                const input = doc.querySelector('textarea, [contenteditable="true"], [role="textbox"]');
                 return !!input;
             },
             isStreaming: (doc) => {
-                const indicators = doc.querySelectorAll('.animate-pulse, .animate-spin, [class*="cursor-"]');
-                if (indicators.length > 0) return true;
-                return false;
+                const spinners = doc.querySelectorAll('.animate-pulse, .animate-spin, [class*="loading"], [class*="streaming"]');
+                if (spinners.length > 0) return true;
+                const stopBtn = doc.querySelector('button[aria-label*="stop" i]');
+                return !!stopBtn;
             },
             isComplete: (doc) => {
-                const streaming = doc.querySelectorAll('.animate-pulse, .animate-spin');
-                return streaming.length === 0;
+                const streaming = doc.querySelectorAll('.animate-pulse, .animate-spin, [class*="loading"]');
+                if (streaming.length > 0) return false;
+                const stopBtn = doc.querySelector('button[aria-label*="stop" i]');
+                return !stopBtn;
             }
         },
         responseTimeout: 120000,
-        stabilityThreshold: 3000,
-        // Use Enter key to send instead of clicking button
+        stabilityThreshold: 4000,
+        healthCheckTimeout: 20000,  // Longer timeout for Perplexity to load
         useEnterToSend: true
     },
     copilot_web: {
@@ -168,13 +175,18 @@ const PROVIDER_CONFIGS = {
 // BRIDGE SESSION CLASS
 // ============================================
 class WindowBridgeSession {
-    constructor(providerKey, port = null) {
-        this.providerKey = providerKey;
+    constructor(workerId, port = null) {
+        // Support clone workers: chatgpt_web_2 -> baseProvider is chatgpt_web
+        const isClone = /_\d+$/.test(workerId);
+        this.workerId = workerId;  // Full worker ID (e.g., chatgpt_web_2)
+        this.providerKey = isClone ? workerId.replace(/_\d+$/, '') : workerId;  // Base provider for config
+        this.isClone = isClone;
+
         this.port = port;
         this.state = BridgeStates.IDLE;
         this.windowId = null;
         this.tabId = null;
-        this.config = { ...DEFAULT_CONFIG, ...PROVIDER_CONFIGS[providerKey] };
+        this.config = { ...DEFAULT_CONFIG, ...PROVIDER_CONFIGS[this.providerKey] };
         this.retryCount = 0;
         this.lastError = null;
         this.startTime = null;
@@ -211,10 +223,29 @@ class WindowBridgeSession {
         }
     }
 
-    notifySuccess(answer) {
+    notifySuccess(answer, meta = {}) {
         if (this.port) {
             try {
-                this.port.postMessage({ status: 'success', answer });
+                // Get worker config for identity info
+                const workerConfig = PROVIDER_CONFIGS[this.providerKey] || {};
+
+                this.port.postMessage({
+                    status: 'success',
+                    answer,
+                    // Worker Identity - standardized response format
+                    worker: {
+                        id: this.providerKey,
+                        name: workerConfig.name || this.providerKey,
+                        shortName: workerConfig.shortName || '',
+                        icon: workerConfig.icon || '🤖',
+                        color: workerConfig.color || '#6b7280'
+                    },
+                    // Response metadata
+                    meta: {
+                        responseTime: this.metrics?.responseDuration || 0,
+                        ...meta
+                    }
+                });
             } catch (e) { }
         }
     }
@@ -230,6 +261,103 @@ class WindowBridgeSession {
 
     async sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // --- SMART ELEMENT DETECTION (Self-Healing) ---
+
+    /**
+     * Get selector for an element type, using ElementDetector as fallback
+     * @param {string} elementType - 'input', 'submit', 'response', 'loading'
+     * @returns {string|null} - The selector to use
+     */
+    async getSmartSelector(elementType) {
+        // 1. Try hardcoded selector first (faster)
+        const hardcodedMap = {
+            'input': this.config.selectors?.input,
+            'submit': this.config.selectors?.sendButton,
+            'response': this.config.selectors?.response,
+            'loading': this.config.selectors?.streamingIndicator || this.config.selectors?.stopButton
+        };
+
+        const hardcoded = hardcodedMap[elementType];
+
+        // If we have tabId, try to verify the selector works
+        if (this.tabId && hardcoded) {
+            const works = await this._testSelector(hardcoded);
+            if (works) {
+                return hardcoded;
+            }
+            console.log(`[WindowBridge] Hardcoded selector failed for ${elementType}, trying smart detection...`);
+        } else if (hardcoded) {
+            // No tabId yet, trust hardcoded
+            return hardcoded;
+        }
+
+        // 2. Fallback to ElementDetector
+        const detector = self.ASKGPT_BG?.elementDetector;
+        if (detector && this.tabId) {
+            const result = await detector.detectElement(this.tabId, this.providerKey, elementType);
+            if (result?.selector) {
+                console.log(`[WindowBridge] Smart detection found ${elementType}: ${result.selector}`);
+                return result.selector;
+            }
+        }
+
+        // 3. Return hardcoded anyway as last resort
+        return hardcoded || null;
+    }
+
+    /**
+     * Test if a selector finds an element in the current tab
+     */
+    async _testSelector(selector) {
+        if (!this.tabId || !selector) return false;
+
+        try {
+            const [result] = await chrome.scripting.executeScript({
+                target: { tabId: this.tabId },
+                func: (sel) => {
+                    const el = document.querySelector(sel);
+                    if (!el) return false;
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.height > 0;
+                },
+                args: [selector]
+            });
+            return result?.result || false;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Self-heal: Re-detect all elements when operations fail
+     */
+    async selfHeal() {
+        const detector = self.ASKGPT_BG?.elementDetector;
+        if (!detector || !this.tabId) return false;
+
+        console.log(`[WindowBridge] Self-healing ${this.providerKey}...`);
+        this.notifyProgress('🔧 Detecting UI elements...');
+
+        const results = await detector.healWorker(this.tabId, this.providerKey);
+
+        // Update config with new selectors
+        if (results.input?.selector) {
+            this.config.selectors = this.config.selectors || {};
+            this.config.selectors.input = results.input.selector;
+        }
+        if (results.submit?.selector) {
+            this.config.selectors.sendButton = results.submit.selector;
+        }
+        if (results.response?.selector) {
+            this.config.selectors.response = results.response.selector;
+        }
+
+        const successCount = Object.values(results).filter(r => r?.selector).length;
+        console.log(`[WindowBridge] Self-heal found ${successCount}/4 elements`);
+
+        return successCount >= 2; // At least input and response
     }
 
     // --- Health Check: Verify Window is Ready ---
@@ -290,8 +418,10 @@ class WindowBridgeSession {
         const selectors = this.config.selectors || PROVIDER_CONFIGS[providerKey]?.selectors || {};
         const inputSelector = selectors.input || '#prompt-textarea';
 
+        console.log(`[WindowBridge] waitForWindowReady: using selector "${inputSelector}" for ${providerKey}`);
+
         const startTime = Date.now();
-        const timeout = this.config.healthCheckTimeout;
+        const timeout = this.config.healthCheckTimeout || 10000;
 
         return new Promise(async (resolve, reject) => {
             let elapsed = 0;
@@ -385,59 +515,194 @@ class WindowBridgeSession {
                 await self.ASKGPT_BG.attachDebugger(this.tabId);
             }
 
-            // Clear input and focus
+            // Wait for input element to be ready (important for Perplexity after conversation transition)
             const selectors = this.config.selectors || {};
-            await chrome.scripting.executeScript({
-                target: { tabId: this.tabId },
-                func: (inputSel, pk) => {
-                    const el = document.querySelector(inputSel);
-                    if (el) {
-                        el.scrollIntoView({ block: 'center' });
-                        el.click();
-                        el.innerHTML = pk === 'chatgpt_web' ? '<p><br></p>' : '';
-                        el.focus();
+            let inputFound = false;
+            let waitAttempts = 0;
+            const maxWaitAttempts = 20; // 4 seconds max
+
+            // For Perplexity: scroll to bottom first to ensure input is visible
+            if (this.providerKey === 'perplexity_web') {
+                await chrome.scripting.executeScript({
+                    target: { tabId: this.tabId },
+                    func: () => {
+                        // Scroll the main container to bottom
+                        window.scrollTo(0, document.body.scrollHeight);
+                        const scrollContainers = document.querySelectorAll('[class*="overflow"], main, [class*="scroll"]');
+                        scrollContainers.forEach(c => {
+                            try { c.scrollTop = c.scrollHeight; } catch (e) { }
+                        });
+                        console.log('[Perplexity] Scrolled to bottom');
                     }
-                },
-                args: [selectors.input || '#prompt-textarea', this.providerKey]
-            });
+                });
+                await this.sleep(500); // Wait for scroll to settle
+            }
+
+            while (!inputFound && waitAttempts < maxWaitAttempts) {
+                const [result] = await chrome.scripting.executeScript({
+                    target: { tabId: this.tabId },
+                    func: (inputSel, pk) => {
+                        // For Perplexity: look for the input at the bottom of the page
+                        if (pk === 'perplexity_web') {
+                            // Try multiple selectors for Perplexity conversation page
+                            const selectors = [
+                                'textarea[placeholder]', // Most common
+                                'textarea',
+                                '[contenteditable="true"]:not([aria-hidden])',
+                                '[role="textbox"]',
+                                '.ProseMirror'
+                            ];
+
+                            for (const sel of selectors) {
+                                const elements = document.querySelectorAll(sel);
+                                // Get the LAST one (most likely the input at bottom)
+                                const el = elements[elements.length - 1];
+                                if (el) {
+                                    const rect = el.getBoundingClientRect();
+                                    const isVisible = rect.width > 0 && rect.height > 0 && rect.bottom > 0;
+
+                                    if (isVisible) {
+                                        // DON'T scroll - just focus directly
+                                        el.focus();
+
+                                        // Clear content properly
+                                        if (el.tagName === 'TEXTAREA') {
+                                            el.value = '';
+                                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                                        } else if (el.tagName === 'INPUT') {
+                                            el.value = '';
+                                        } else {
+                                            // For contenteditable
+                                            el.innerHTML = '';
+                                        }
+
+                                        console.log('[Perplexity] Input found and focused:', sel, 'at y:', rect.top);
+                                        return { found: true, selector: sel };
+                                    }
+                                }
+                            }
+                            return { found: false };
+                        }
+
+                        // For other providers
+                        const el = document.querySelector(inputSel);
+                        if (el) {
+                            const rect = el.getBoundingClientRect();
+                            if (rect.width > 0 && rect.height > 0) {
+                                el.scrollIntoView({ block: 'center' });
+                                el.click();
+                                el.focus();
+
+                                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                                    el.value = '';
+                                } else {
+                                    el.innerHTML = pk === 'chatgpt_web' ? '<p><br></p>' : '';
+                                }
+
+                                console.log('[WindowBridge] Input found:', inputSel);
+                                return { found: true, selector: inputSel };
+                            }
+                        }
+                        return { found: false };
+                    },
+                    args: [selectors.input || '#prompt-textarea', this.providerKey]
+                });
+
+                if (result?.result?.found) {
+                    inputFound = true;
+                    console.log('[WindowBridge] Input ready after', waitAttempts, 'attempts');
+                } else {
+                    waitAttempts++;
+                    await this.sleep(200);
+                }
+            }
+
+            if (!inputFound) {
+                console.warn('[WindowBridge] Input not found after waiting');
+                // Try one more time with smart detection fallback
+                await chrome.scripting.executeScript({
+                    target: { tabId: this.tabId },
+                    func: () => {
+                        // Last resort: find ANY visible input/textarea
+                        const inputs = document.querySelectorAll('textarea, [contenteditable="true"], input[type="text"]');
+                        for (const el of inputs) {
+                            const rect = el.getBoundingClientRect();
+                            if (rect.width > 100 && rect.height > 20) {
+                                el.scrollIntoView({ block: 'center' });
+                                el.click();
+                                el.focus();
+                                console.log('[WindowBridge] Fallback input:', el.tagName, el.className);
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                });
+            }
 
             await this.sleep(200);
 
-            // Insert text via debugger
+            // === RE-ATTACH DEBUGGER before inserting text ===
+            // This is crucial for 2nd+ messages
+            console.log('[WindowBridge] Re-attaching debugger for text insertion...');
+            try {
+                await self.ASKGPT_BG.attachDebugger(this.tabId);
+                await this.sleep(100);
+            } catch (e) {
+                console.log('[WindowBridge] Debugger attach:', e.message);
+            }
+
+            // === INSERT TEXT VIA DEBUGGER (same method for all providers) ===
+            console.log('[WindowBridge] Inserting text via debugger...');
             await chrome.debugger.sendCommand({ tabId: this.tabId }, 'Input.insertText', { text });
-            await this.sleep(200);
+            await this.sleep(300);
 
-            // Press Enter
+            // === PRESS ENTER TO SEND ===
+            console.log('[WindowBridge] Pressing Enter to send...');
             await chrome.debugger.sendCommand({ tabId: this.tabId }, 'Input.dispatchKeyEvent', {
                 type: 'keyDown',
                 windowsVirtualKeyCode: 13,
                 nativeVirtualKeyCode: 13,
+                key: 'Enter',
+                code: 'Enter',
                 text: '\r'
             });
             await chrome.debugger.sendCommand({ tabId: this.tabId }, 'Input.dispatchKeyEvent', {
                 type: 'keyUp',
                 windowsVirtualKeyCode: 13,
-                nativeVirtualKeyCode: 13
+                nativeVirtualKeyCode: 13,
+                key: 'Enter',
+                code: 'Enter'
             });
 
-            // Fallback: click send button after a short delay
-            setTimeout(async () => {
-                try {
-                    await chrome.scripting.executeScript({
-                        target: { tabId: this.tabId },
-                        func: (btnSel) => {
-                            const btn = document.querySelector(btnSel);
-                            if (btn && !btn.disabled) btn.click();
-                        },
-                        args: [selectors.sendButton || '[data-testid="send-button"]']
-                    });
-                } catch (e) { }
-            }, 400);
+            // === FALLBACK: Click send button after delay ===
+            await this.sleep(400);
+            try {
+                await chrome.scripting.executeScript({
+                    target: { tabId: this.tabId },
+                    func: (pk) => {
+                        const buttonSelectors = pk === 'perplexity_web'
+                            ? ['button[aria-label*="submit" i]', 'button[aria-label*="send" i]', 'button[type="submit"]']
+                            : ['[data-testid="send-button"]', '#composer-submit-button', 'button[aria-label*="Send"]'];
+
+                        for (const sel of buttonSelectors) {
+                            const btn = document.querySelector(sel);
+                            if (btn && !btn.disabled) {
+                                console.log('[WindowBridge] Clicking fallback button:', sel);
+                                btn.click();
+                                break;
+                            }
+                        }
+                    },
+                    args: [this.providerKey]
+                });
+            } catch (e) { }
 
             this.metrics.sendDuration = Date.now() - sendStart;
             return { success: true };
 
         } catch (e) {
+            console.error('[WindowBridge] Send error:', e);
             return { success: false, error: e.message };
         }
     }
@@ -551,35 +816,253 @@ class WindowBridgeSession {
                 try {
                     const [{ result }] = await chrome.scripting.executeScript({
                         target: { tabId: this.tabId },
-                        func: (startCount, selectors) => {
-                            // Get conversation turns - use prefix selector for dynamic IDs
-                            const turns = document.querySelectorAll('[data-testid^="conversation-turn"]');
+                        func: (startCount, selectors, providerKey) => {
+                            // First, scroll to bottom to ensure we can see new content
+                            window.scrollTo(0, document.body.scrollHeight);
+                            const scrollContainer = document.querySelector('[class*="overflow"], main, article');
+                            if (scrollContainer) {
+                                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                            }
+
+                            // Get response elements using provider selectors
                             const markdowns = document.querySelectorAll(selectors.response);
                             const hasNewResponse = markdowns.length > startCount;
 
                             let fullHtml = '';
                             let fullText = '';
 
-                            if (hasNewResponse && turns.length > 0) {
-                                // Get the last assistant turn
-                                const lastTurn = turns[turns.length - 1];
-                                const isAssistant = lastTurn?.querySelector('[data-message-author-role="assistant"]');
-
-                                if (isAssistant) {
-                                    // Get ALL content from this turn (handles code blocks, lists, etc.)
-                                    const messageContent = lastTurn.querySelector('.markdown');
-                                    if (messageContent) {
-                                        fullHtml = messageContent.innerHTML;
-                                        fullText = messageContent.innerText;
+                            // ChatGPT specific: use conversation turns
+                            if (providerKey === 'chatgpt_web') {
+                                const turns = document.querySelectorAll('[data-testid^="conversation-turn"]');
+                                if (hasNewResponse && turns.length > 0) {
+                                    const lastTurn = turns[turns.length - 1];
+                                    const isAssistant = lastTurn?.querySelector('[data-message-author-role="assistant"]');
+                                    if (isAssistant) {
+                                        const messageContent = lastTurn.querySelector('.markdown');
+                                        if (messageContent) {
+                                            fullHtml = messageContent.innerHTML;
+                                            fullText = messageContent.innerText;
+                                        }
                                     }
                                 }
                             }
 
-                            // Fallback to direct markdown if turn-based didn't work
-                            if (!fullHtml && hasNewResponse) {
+                            // Perplexity specific: find LARGEST prose, exclude "related" section
+                            if (providerKey === 'perplexity_web') {
+                                // Helper: Check if element is in "related" section
+                                const isRelated = (el) => {
+                                    const allClasses = [
+                                        el.className,
+                                        el.parentElement?.className,
+                                        el.parentElement?.parentElement?.className,
+                                        el.parentElement?.parentElement?.parentElement?.className
+                                    ].join(' ').toLowerCase();
+
+                                    if (allClasses.includes('related') || allClasses.includes('suggestion')) return true;
+
+                                    const header = el.querySelector('h1, h2, h3, h4, h5, span');
+                                    if (header?.innerText?.toLowerCase().includes('related')) return true;
+                                    if (header?.innerText?.toLowerCase().includes('people also')) return true;
+
+                                    return false;
+                                };
+
+                                // Find all prose elements
+                                const proseElements = document.querySelectorAll('.prose, [class*="prose"], [class*="answer"], article, [class*="markdown"]');
+                                let bestElement = null;
+                                let maxLength = 0;
+
+                                for (const el of proseElements) {
+                                    // Skip related sections
+                                    if (isRelated(el)) continue;
+
+                                    const text = el.innerText || '';
+                                    // Skip tiny elements
+                                    if (text.length < 100) continue;
+
+                                    // Get largest
+                                    if (text.length > maxLength) {
+                                        maxLength = text.length;
+                                        bestElement = el;
+                                    }
+                                }
+
+                                // If no single container, combine all valid prose
+                                if (!bestElement) {
+                                    const allProse = document.querySelectorAll('.prose');
+                                    let combined = { html: '', text: '' };
+
+                                    for (const el of allProse) {
+                                        if (isRelated(el)) continue;
+                                        const text = (el.innerText || '').trim();
+                                        if (text.length > 30) {
+                                            combined.html += el.innerHTML + '\n';
+                                            combined.text += text + '\n';
+                                        }
+                                    }
+
+                                    if (combined.text.length > 50) {
+                                        fullHtml = combined.html;
+                                        fullText = combined.text;
+                                    }
+                                } else {
+                                    fullHtml = bestElement.innerHTML;
+                                    fullText = bestElement.innerText;
+                                }
+
+                                console.log('[Perplexity Bridge] Found:', fullText.length, 'chars');
+                            }
+
+                            // Copilot specific: find actual message content, exclude toolbar
+                            if (providerKey === 'copilot_web') {
+                                // Helper: Check if element is toolbar/action buttons
+                                const isToolbar = (el) => {
+                                    const className = (el.className || '').toLowerCase();
+                                    const parentClass = (el.parentElement?.className || '').toLowerCase();
+
+                                    // Exclude toolbar, actions, buttons containers
+                                    if (className.includes('toolbar') || className.includes('action')) return true;
+                                    if (className.includes('button') || className.includes('btn')) return true;
+                                    if (className.includes('feedback') || className.includes('copy')) return true;
+                                    if (className.includes('suggestion') || className.includes('related')) return true;
+                                    if (parentClass.includes('toolbar') || parentClass.includes('action')) return true;
+
+                                    // Check if it's just icons/small elements
+                                    const icons = el.querySelectorAll('svg, i, .icon');
+                                    if (icons.length > 0 && el.innerText.length < 50) return true;
+
+                                    return false;
+                                };
+
+                                // Copilot response selectors - try multiple patterns
+                                const responseSelectors = [
+                                    // Main content containers
+                                    '[class*="message-content"]',
+                                    '[class*="response-content"]',
+                                    '[class*="chat-message"]',
+                                    '.ac-container [class*="text"]',
+                                    '[data-content="ai-message"]',
+                                    // Markdown content
+                                    '.prose:not([class*="toolbar"])',
+                                    '.markdown-body',
+                                    // Generic
+                                    '[class*="message"]:not([class*="user"])'
+                                ];
+
+                                let bestContent = null;
+                                let maxLength = 0;
+
+                                for (const sel of responseSelectors) {
+                                    try {
+                                        const elements = document.querySelectorAll(sel);
+                                        for (const el of elements) {
+                                            if (isToolbar(el)) continue;
+
+                                            const text = el.innerText || '';
+                                            if (text.length < 20) continue; // Skip tiny elements
+
+                                            // Prefer larger content
+                                            if (text.length > maxLength) {
+                                                maxLength = text.length;
+                                                bestContent = el;
+                                            }
+                                        }
+                                    } catch (e) { }
+                                }
+
+                                if (bestContent && maxLength > 50) {
+                                    fullHtml = bestContent.innerHTML;
+                                    fullText = bestContent.innerText;
+                                    console.log('[Copilot Bridge] Found:', fullText.length, 'chars');
+                                }
+                            }
+
+                            // Grok specific: find message content
+                            if (providerKey === 'grok_web') {
+                                const responseSelectors = [
+                                    '[class*="message"]:not([class*="user"])',
+                                    '[class*="response"]',
+                                    '.prose',
+                                    '[class*="content"]:not([class*="input"])'
+                                ];
+
+                                let bestContent = null;
+                                let maxLength = 0;
+
+                                for (const sel of responseSelectors) {
+                                    try {
+                                        const elements = document.querySelectorAll(sel);
+                                        const lastEl = elements[elements.length - 1];
+                                        if (lastEl) {
+                                            const text = lastEl.innerText || '';
+                                            if (text.length > maxLength && text.length > 20) {
+                                                maxLength = text.length;
+                                                bestContent = lastEl;
+                                            }
+                                        }
+                                    } catch (e) { }
+                                }
+
+                                if (bestContent && maxLength > 50) {
+                                    fullHtml = bestContent.innerHTML;
+                                    fullText = bestContent.innerText;
+                                    console.log('[Grok Bridge] Found:', fullText.length, 'chars');
+                                }
+                            }
+
+                            // Fallback/Other providers: use last response element
+                            if (!fullHtml && markdowns.length > 0) {
                                 const lastMarkdown = markdowns[markdowns.length - 1];
                                 fullHtml = lastMarkdown?.innerHTML || '';
                                 fullText = lastMarkdown?.innerText || '';
+                            }
+
+                            // === CLEAN HTML: Remove buttons, toolbars, copy elements ===
+                            if (fullHtml) {
+                                // Create a temporary div to manipulate HTML
+                                const tempDiv = document.createElement('div');
+                                tempDiv.innerHTML = fullHtml;
+
+                                // Remove unwanted elements
+                                const unwantedSelectors = [
+                                    'button',
+                                    '[class*="copy"]',
+                                    '[class*="Copy"]',
+                                    '[class*="toolbar"]',
+                                    '[class*="Toolbar"]',
+                                    '[class*="action"]',
+                                    '[class*="Action"]',
+                                    '[class*="feedback"]',
+                                    '[class*="Feedback"]',
+                                    '[aria-label*="copy" i]',
+                                    '[aria-label*="Copy" i]',
+                                    '[title*="copy" i]',
+                                    '[title*="Copy" i]',
+                                    'svg',
+                                    '.icon',
+                                    '[class*="icon"]',
+                                    '[class*="-btn"]',
+                                    '[class*="btn-"]',
+                                    '[role="button"]'
+                                ];
+
+                                for (const sel of unwantedSelectors) {
+                                    try {
+                                        const elements = tempDiv.querySelectorAll(sel);
+                                        elements.forEach(el => {
+                                            // Don't remove if it contains substantial text content
+                                            const text = el.innerText || '';
+                                            if (text.length < 30) {
+                                                el.remove();
+                                            }
+                                        });
+                                    } catch (e) { }
+                                }
+
+                                fullHtml = tempDiv.innerHTML;
+                                fullText = tempDiv.innerText;
+
+                                console.log('[WindowBridge] Cleaned HTML, final length:', fullText.length);
                             }
 
                             // === NEW DETECTION LOGIC ===
@@ -618,7 +1101,7 @@ class WindowBridgeSession {
                                 responseCount: markdowns.length
                             };
                         },
-                        args: [initialCount, this.config.selectors || PROVIDER_CONFIGS.chatgpt_web.selectors]
+                        args: [initialCount, this.config.selectors || PROVIDER_CONFIGS[this.providerKey]?.selectors || PROVIDER_CONFIGS.chatgpt_web.selectors, this.providerKey]
                     });
 
                     // Update state based on result
@@ -707,8 +1190,8 @@ class WindowBridgeSession {
         this.setState(BridgeStates.PREPARING);
 
         try {
-            // 1. Ensure window exists and is ready
-            const winData = await self.ASKGPT_BG.ensureWindow(this.providerKey, this.port);
+            // 1. Ensure window exists and is ready (use workerId for separate clone windows)
+            const winData = await self.ASKGPT_BG.ensureWindow(this.workerId, this.port);
             this.windowId = winData.windowId;
             this.tabId = winData.tabId;
 
@@ -729,12 +1212,12 @@ class WindowBridgeSession {
             // 6. Wait for response completion
             const response = await this.waitForResponse(initialCount, options);
 
-            // 7. Cleanup
+            // 7. Cleanup metrics
             this.metrics.totalDuration = Date.now() - this.startTime;
             this.notifySuccess(response.html);
 
-            // Close window after success
-            setTimeout(() => this._cleanup(), 1000);
+            // DISABLED: Don't auto-close window - keep worker alive for future messages
+            // setTimeout(() => this._cleanup(), 1000);
 
             return response;
 
